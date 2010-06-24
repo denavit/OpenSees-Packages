@@ -19,8 +19,7 @@ OS_FLAG ?= -D_LINUX
 
 ifeq ($(OS_FLAG), -D_LINUX)
 
-#LIBRARY         = $(HOME)/bin/sakinoSunConcrete04.so
-LIBRARY         = /home/denavit2/Work/OpenSeesLatest2/bin/sakinoSunConcrete04.so
+LIBRARY         = $(COMPOSITE_LIB_BIN)/sakinoSunConcrete04.so
 
 
 OUTSIDE_OBJS = 

@@ -19,9 +19,7 @@ OS_FLAG ?= -D_LINUX
 
 ifeq ($(OS_FLAG), -D_LINUX)
 
-#LIBRARY         = $(HOME)/bin/changManderConcrete01.so
-LIBRARY         = /home/denavit2/Work/OpenSeesLatest2/bin/changManderConcrete01.so
-
+LIBRARY         = $(COMPOSITE_LIB_BIN)/changManderConcrete01.so
 
 OUTSIDE_OBJS = 
 

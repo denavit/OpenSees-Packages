@@ -4,7 +4,7 @@ OS_FLAG ?= -D_LINUX
 
 ifeq ($(OS_FLAG), -D_LINUX)
 
-LIBRARY         = /home/denavit2/Work/OpenSeesLatest2/bin/mixedBeamColumn3d.so
+LIBRARY         = $(COMPOSITE_LIB_BIN)/mixedBeamColumn3d.so
 
 all:   $(LIBRARY)
 
