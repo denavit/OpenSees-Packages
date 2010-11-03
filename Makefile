@@ -3,6 +3,7 @@ include ../../Makefile.def
 all: 
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/changManderConcrete01; $(MAKE);
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/sakinoSunConcrete04; $(MAKE);
+	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteel01; $(MAKE);
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteelCCFT; $(MAKE);
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteelRCFT; $(MAKE);
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/mixedBeamColumn2d; $(MAKE);
@@ -21,6 +22,7 @@ spotless: clean
 wipe: spotless
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/changManderConcrete01; $(MAKE) wipe;
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/sakinoSunConcrete04; $(MAKE) wipe;
+	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteel01; $(MAKE) wipe;
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteelCCFT; $(MAKE) wipe;
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/shenSteelRCFT; $(MAKE) wipe;
 	@$(CD) $(FE)/../PACKAGES/CompositePackages/mixedBeamColumn2d; $(MAKE) wipe;
