@@ -162,9 +162,9 @@ OPS_mixedBeamColumn3d()
   
   // Get the coordinate transformation
   int transfTag = iData[5];
-  CrdTransf3d *theTransf3d = OPS_GetGetCrdTransf3d(transfTag);
+  CrdTransf *theTransf = OPS_GetCrdTransfPtr(transfTag);
 
-  if (theTransf3d == 0) {
+  if (theTransf == 0) {
     opserr << "WARNING geometric transformation with tag " << transfTag << "not found for element " << eleTag << endln;
     return 0;
   }
@@ -175,7 +175,7 @@ OPS_mixedBeamColumn3d()
   double massDens = 0.0;
   
   // now create the element and add it to the Domain
-  Element *theElement = new mixedBeamColumn3d(eleTag, nodeI, nodeJ, numIntgrPts, sections, beamIntegr, *theTransf3d, massDens);
+  Element *theElement = new mixedBeamColumn3d(eleTag, nodeI, nodeJ, numIntgrPts, sections, beamIntegr, *theTransf, massDens);
   
   if (theElement == 0) {
     opserr << "WARNING ran out of memory creating element with tag " << eleTag << endln;
@@ -190,7 +190,7 @@ OPS_mixedBeamColumn3d()
 // and the node ID's of it's nodal end points.
 // allocates the necessary space needed by each object
 mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec, FiberSectionGJ **sec,
-				      BeamIntegration &bi, CrdTransf3d &coordTransf, double massDensPerUnitLength):
+				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength):
   Element(tag,ELE_TAG_mixedBeamColumn3d), 
   connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0),
   rho(massDensPerUnitLength), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
@@ -221,7 +221,7 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
    }
 
    // get copy of the transformation object
-   crdTransf = coordTransf.getCopy();
+   crdTransf = coordTransf.getCopy3d();
    if (crdTransf == 0) {
       opserr << "Error: mixedBeamColumn3d::mixedBeamColumn3d: could not create copy of coordinate transformation object" << endln;
       exit(-1);

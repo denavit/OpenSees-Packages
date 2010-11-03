@@ -161,9 +161,9 @@ OPS_mixedBeamColumn2d()
   
   // Get the coordinate transformation
   int transfTag = iData[5];
-  CrdTransf2d *theTransf2d = OPS_GetGetCrdTransf2d(transfTag);
+  CrdTransf *theTransf = OPS_GetCrdTransfPtr(transfTag);
 
-  if (theTransf2d == 0) {
+  if (theTransf == 0) {
     opserr << "WARNING geometric transformation with tag " << transfTag << "not found for element " << eleTag << endln;
     return 0;
   }
@@ -174,7 +174,7 @@ OPS_mixedBeamColumn2d()
   double massDens = 0.0;
   
   // now create the element and add it to the Domain
-  Element *theElement = new mixedBeamColumn2d(eleTag, nodeI, nodeJ, numIntgrPts, sections, beamIntegr, *theTransf2d, massDens);
+  Element *theElement = new mixedBeamColumn2d(eleTag, nodeI, nodeJ, numIntgrPts, sections, beamIntegr, *theTransf, massDens);
   
   if (theElement == 0) {
     opserr << "WARNING ran out of memory creating element with tag " << eleTag << endln;
@@ -189,7 +189,7 @@ OPS_mixedBeamColumn2d()
 // and the node ID's of it's nodal end points.
 // allocates the necessary space needed by each object
 mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec, FiberSectionGJ **sec,
-				      BeamIntegration &bi, CrdTransf2d &coordTransf, double massDensPerUnitLength):
+				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength):
   Element(tag,ELE_TAG_mixedBeamColumn2d), 
   connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0),
   rho(massDensPerUnitLength), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
@@ -220,7 +220,7 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
    }
 
    // get copy of the transformation object
-   crdTransf = coordTransf.getCopy();
+   crdTransf = coordTransf.getCopy2d();
    if (crdTransf == 0) {
       opserr << "Error: mixedBeamColumn2d::mixedBeamColumn2d: could not create copy of coordinate transformation object" << endln;
       exit(-1);
@@ -1290,7 +1290,26 @@ mixedBeamColumn2d::setResponse(const char **argv, int argc, OPS_Stream &output)
 
       theResponse = new ElementResponse(this, 1, theVector);
 
-    }  else if (strcmp(argv[0],"section") ==0) { 
+    }  else if (strcmp(argv[0],"localForce") == 0 || strcmp(argv[0],"localForces") == 0) {
+
+      output.tag("ResponseType","N_1");
+      output.tag("ResponseType","V_1");
+      output.tag("ResponseType","M_1");
+      output.tag("ResponseType","N_2");
+      output.tag("ResponseType","V_2");
+      output.tag("ResponseType","M_2");
+
+      theResponse = new ElementResponse(this, 2, theVector);
+
+    } else if (strcmp(argv[0],"basicForce") == 0 || strcmp(argv[0],"basicForces") == 0) {
+
+        output.tag("ResponseType","N");
+        output.tag("ResponseType","M_1");
+        output.tag("ResponseType","M_2");
+
+        theResponse = new ElementResponse(this, 3, Vector(3));
+
+    } else if (strcmp(argv[0],"section") ==0) {
     	if (argc > 2) {
     
     		int sectionNum = atoi(argv[1]);
@@ -1321,7 +1340,17 @@ mixedBeamColumn2d::getResponse(int responseID, Information &eleInfo)
 {
   if (responseID == 1) { // global forces
 	  return eleInfo.setVector(this->getResistingForce());
-	  
+  } else if (responseID == 2) { // local forces
+	    theVector(3) =  internalForceOpenSees(0);
+	    theVector(0) = -internalForceOpenSees(0);
+	    theVector(2) = internalForceOpenSees(1);
+	    theVector(5) = internalForceOpenSees(2);
+	    double V = (internalForceOpenSees(1)+internalForceOpenSees(2))/crdTransf->getInitialLength();
+	    theVector(1) =  V;
+	    theVector(4) = -V;
+	    return eleInfo.setVector(theVector);
+  } else if (responseID == 4) { // basic forces
+	  return eleInfo.setVector(internalForceOpenSees);
   } else {
     return -1;
   

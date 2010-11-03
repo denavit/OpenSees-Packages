@@ -39,7 +39,7 @@
 //#include <BeamIntegration.h>
 //#include <SectionForceDeformation.h>
 #include <FiberSectionGJ.h> // @todo Make the element work for e 
-#include <CrdTransf3d.h>
+#include <CrdTransf.h>
 
 class Node;
 class Channel;
@@ -57,13 +57,13 @@ class mixedBeamColumn3d : public Element
 	  // constructors 
     mixedBeamColumn3d (int tag, int nodeI, int nodeJ,
 		    int numSections, FiberSectionGJ *sectionPtrs[], BeamIntegration &bi,
-		    CrdTransf3d &coordTransf, double massDensPerUnitLength);
+		    CrdTransf &coordTransf, double massDensPerUnitLength);
     mixedBeamColumn3d ();
 
     // destructor
     ~mixedBeamColumn3d();
 
-    // public methods to obtain inforrmation about dof & connectivity
+    // public methods to obtain information about dof & connectivity
     int getNumExternalNodes(void) const;
     const ID &getExternalNodes(void);
     Node **getNodePtrs(void);
@@ -109,7 +109,7 @@ class mixedBeamColumn3d : public Element
 	BeamIntegration *beamIntegr;
     int numSections;
     FiberSectionGJ **sections;          // array of pointers to sections
-    CrdTransf3d *crdTransf;        // pointer to coordinate tranformation object
+    CrdTransf *crdTransf;        // pointer to coordinate tranformation object
 
     double rho;                    // mass density per unit length
     double deflength;
