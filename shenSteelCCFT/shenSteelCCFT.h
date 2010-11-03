@@ -35,7 +35,7 @@
 
 #include <UniaxialMaterial.h>
 
-#define MAT_TAG_shenSteelCCFT 5002
+#define MAT_TAG_shenSteelCCFT 58639
 
 class shenSteelCCFT : public UniaxialMaterial
 {

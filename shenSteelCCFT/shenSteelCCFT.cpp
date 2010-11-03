@@ -64,7 +64,7 @@ OPS_shenSteelCCFT()
 
   numData = 1;
   if (OPS_GetIntInput(&numData, iData) != 0) {
-    opserr << "WARNING invalid uniaxialMaterial shenSteelCCFT tag" << endln;
+    opserr << "WARNING invalid uniaxialMaterial shenSteelCCFT tag\n" << endln;
     return 0;
   }
 
@@ -76,24 +76,24 @@ OPS_shenSteelCCFT()
 
   // Check the data
   if ( dData[0] <= 0 ) {
-	  opserr << "WARNING Fy should be a positive value";
+	  opserr << "WARNING Fy should be a positive value\n";
 	  return 0;
   }
   if ( dData[1] < dData[0] ) {
-	  opserr << "WARNING Fu greater than Fy";
+	  opserr << "WARNING Fy greater than Fu\n";
 	  return 0;
   }  
   if ( dData[2] <= 0 ) {
-	  opserr << "WARNING Es should be a positive value";
+	  opserr << "WARNING Es should be a positive value\n";
 	  return 0;
   }  
   // @todo check the rest of the data
   
   
-  theMaterial = new shenSteelCCFT(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5], 
+  theMaterial = new shenSteelCCFT(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5],
 		  dData[6], dData[7], dData[8], dData[9], dData[10],
 		  dData[11], dData[12], dData[13], dData[14], dData[15],
-		  dData[16], dData[17], dData[18]);       
+		  dData[16], dData[17], dData[18]);
 
   if (theMaterial == 0) {
     opserr << "WARNING could not create uniaxialMaterial of type shenSteelCCFT \n";
@@ -191,7 +191,7 @@ shenSteelCCFT::setTrialStrain(double strain, double strainRate)
 		plastic = 0;
 		lb = 1;
 		
-		// stress at which local buckling occured which is new local buckling bounding stress
+		// stress at which local buckling occurred which is new local buckling bounding stress
 		localBucklingBoundingStress = committedStress;
 		
 		// make sure the buckling stress is not positive
@@ -514,7 +514,7 @@ shenSteelCCFT::revertToStart(void)
   double alphaZn = 0.5*(alphaHoop-pow(4-3*alphaHoop*alphaHoop,0.5));
   Tls_p = alphaZp * Rls; Cls_p = Tls_p;
   Tls_n = alphaZn * Rls; Cls_n = Tls_n; 
-  opserr << "alphaHoop: " << alphaHoop << "  alphaZp: " << alphaZp << "  alphaZn: " << alphaZn << "\n";
+  //opserr << "alphaHoop: " << alphaHoop << "  alphaZp: " << alphaZp << "  alphaZn: " << alphaZn << "\n";
   
   Tbs_p = Rbso; Cbs_p = Rbso;
   Tbs_n = -Rbso; Cbs_n = -Rbso; 
