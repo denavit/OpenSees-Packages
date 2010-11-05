@@ -53,6 +53,30 @@ localInit()
   OPS_Error("sakinoSunConcrete04 unaxial material \nWritten by Mark D Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
 }
 
+// Documentation: Sakino and Sun Concrete Model
+// uniaxialMaterial sakinoSunConcrete04 $tag $fcc $ecc $Ec $W <$ft $et> <$beta>
+//
+// This is a modification of the Concrete04 material to use the Sakino & Sun model in the
+// compressive region.
+//
+// Input Parameters:
+//   $tag			integer tag identifying material
+//   $fcc			peak compressive stress (input as negative value)
+//   $ecc			strain at peak compressive stress (input as negative value)
+//   $Ec			initial modulus of elasticity
+//   $W				constant in the Sakino & Sun concrete model
+//   $ft			maximum tensile strength of concrete
+//   $et			ultimate tensile strain of concrete
+//   $beta			the exponential curve parameter to define the residual stress (as a factor of $ft) at $etu
+//
+// References:
+//   1. OpenSees (2010). “Concrete04 Material,” Open source software, http://opensees.berkeley.edu.
+//   2. K. Sakino and Y. Sun, “Stress-strain curve of concrete confined by rectilinear hoop,”
+//      Journal of Structural Construction Engineering 461 (1994): 95–104 (in Japanese).
+//   3. K. Sakino et al., “Behavior of Centrally Loaded Concrete-Filled Steel-Tube Short Columns,”
+//      Journal of Structural Engineering 130 (2004): 180.
+//
+
 OPS_Export void *
 OPS_sakinoSunConcrete04()
 {

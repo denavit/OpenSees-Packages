@@ -110,6 +110,29 @@ localInit()
   OPS_Error("mixedBeamColumn3d element \nWritten by Mark D Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
 }
 
+// Documentation: Three Dimensional Mixed Beam Column Element
+// element mixedBeamColumn3d $tag $iNode $jNode $numIntgrPts $secTag $transfTag
+//
+// Required Input Parameters:
+//   $tag					integer tag identifying the element
+//   $iNode, $jNode         end nodes
+//   $numIntgrPts 			number of integration points along the element length
+//   $secTag 				identifier for previously-defined section object
+//   $transfTags  			identifier for previously-defined coordinate-transformation (CrdTransf) object
+//
+// References:
+//   1. Bulent N. Alemdar and Donald W. White, “Displacement, Flexibility, and Mixed Beam-Column Finite
+//      Element Formulations for Distributed Plasticity Analysis,” Journal of Structural Engineering 131,
+//      no. 12 (December 2005): 1811-1819.
+//   2. Cenk Tort and Jerome F. Hajjar, “Mixed Finite Element for Three-Dimensional Nonlinear Dynamic
+//      Analysis of Rectangular Concrete-Filled Steel Tube Beam-Columns,” Journal of Engineering Mechanics
+//      136, no. 11 (November 0, 2010): 1329-1339.
+//   3. Denavit, M. D. and Hajjar, J. F. (2010). "Nonlinear Seismic Analysis of Circular Concrete-Filled
+//      Steel Tube Members and Frames," Report No. NSEL-023, Newmark Structural Laboratory Report Series
+//      (ISSN 1940-9826), Department of Civil and Environmental Engineering, University of Illinois at
+//      Urbana-Champaign, Urbana, Illinois, March.
+//
+
 OPS_Export void *
 OPS_mixedBeamColumn3d()
 {
