@@ -21,17 +21,17 @@
 // $Revision: 1.1 $
 // $Date: 2010/05/04 17:14:46 $
 // $Source: /cvsroot/openseescomp/CompositePackages/shenSteel01/shenSteel01.h,v $
-                                                                        
+
+/* ****************************************************************** **
+**                                                                    **
+** This file was developed by:                                        **
+**   Mark D. Denavit, University of Illinois at Urbana Champaign      **
+**   Jerome F. Hajjar, Northeastern University                        **
+**                                                                    **
+********************************************************************* */
+
 #ifndef shenSteel01_h
 #define shenSteel01_h
-
-// Written: fmk 
-//
-// Description: This file contains the class definition for 
-// shenSteel01. shenSteel01 provides the abstraction
-// of an elastic perfectly plastic uniaxial material, 
-//
-// What: "@(#) shenSteel01.h, revA"
 
 #include <UniaxialMaterial.h>
 
@@ -40,13 +40,18 @@
 class shenSteel01 : public UniaxialMaterial
 {
   public:
-	shenSteel01(int tag, double i1, double i2, double i3, double i4, double i5,
-	  		double i6, double i7, double i8, double i9, double i10, 
-	  		double i11, double i12, double i13, double i14, double i15, 
-	  		double i16, double i17);
-	shenSteel01();
-
+	shenSteel01(int tag, double iA1, double iA2, double iA3,
+			double iB1, double iB2, double iB3, double iB4, double iB5, double iB6, double iB7, double iB8, double iB9, double iB10,
+	  		bool iC1, double iC2, double iC3, double iC4,
+	  		double iD1, double iD2, double iD3,
+	  		bool iE1, double iE2, double iE3, double iE4, int iE5,
+	  		bool iF1, double iF2, double iF3,
+	  		bool iG1, double iG2, double iG3,
+	  		bool iH1, double iH2, double iH3);
+	shenSteel01(int tag);
     ~shenSteel01();
+
+    const char *getClassType(void) const {return "shenSteel01";};
 
     int setTrialStrain(double strain, double strainRate = 0.0); 
     double getStrain(void);          
@@ -72,8 +77,21 @@ class shenSteel01 : public UniaxialMaterial
   private:
 	  // Input Variables
 	  double fy, fu, Ee; // steel yield strength, steel ultimate strength, steel elastic modulus
+	  double Rbso, Epoi, alfa, a, bb, c, w, ksi, e, fE; //parameters from the Japanese material model
+	  bool modelYieldPlateau; // flag for modeling the yield plateau (true = yield plateau modeled)
+	  double M, Est, est; // yield plateau parameters
 	  double initStress; // initial stress (for residual stress)
-	  double Rbso, Epoi, alfa, a, bb, c, w, ksi, e, fE, M, Est, est; //parameters from the Japanese material model
+	  double alphaLat; // biaxial stress ratio
+	  double ep0; // initial plastic strain
+	  bool modelLocalBuckling; // flag for modeling local buckling (true = local buckling modeled)
+	  double localBucklingStrain, Ksft, alphaFulb; // local buckling parameters
+	  int refFulb; // local buckling parameter
+	  bool modelDegradeEp;  // flag for modeling degradation in Ep (true = it is modeled)
+	  double degradeEpRate, degradeEpLimit; // degradation parameters
+	  bool modelDegradeKappa;  // flag for modeling degradation in kappa (true = it is modeled)
+	  double degradeKappaRate, degradeKappaLimit; // degradation parameter
+	  bool modelDegradeFulb;  // flag for modeling degradation in Fulb (true = it is modeled)
+	  double degradeFulbRate, degradeFulbLimit; // degradation parameter
 
 	  // Computed Material Properties
 	  double Rlso; //initial size of the loading surface
@@ -86,8 +104,8 @@ class shenSteel01 : public UniaxialMaterial
 	  // Flags to determine the general state of the material
 	  int plasticityStatus, commitedPlasticityStatus; // flag for the status of the plasticity: 0 = Elastic, 1 = Tensile Plastic, 2 = Compressive Plastic
 	  int yieldPlateauStatus, commitedYieldPlateauStatus; // flag for the status of the yield plateau: 0 = Vanished (not in post plateau status), 1 = Not Vanished, 2 = Vanished and in post plateau status
-//	  int localBucklingStatus, commitedLocalBucklingStatus; //flag if local buckling is occurring: 0=NOT occurring, 1=IS occurring and in descending branch, 2=IS occurring and in constant branch
-//	  int localBucklingHistory, commitedLocalBucklingHistory; //flag for local buckling history: 0=not local buckling yet, 1=some lb, still in the descending branch, 2=some lb, in the constant branch
+	  int localBucklingStatus, commitedLocalBucklingStatus; //flag if local buckling is occurring: 0=NOT occurring, 1=IS occurring and in descending branch, 2=IS occurring and in constant branch
+	  int localBucklingHistory, commitedLocalBucklingHistory; //flag for local buckling history: 0=not local buckling yet, 1=some lb, still in the descending branch, 2=some lb, in the constant branch
 	  int loadingDirection, committedLoadingDirection; //flag for direction of loading: 0=not set yet 1=positive 2=negative 
 	  int lastYieldedIn, commitedLastYieldedIn; //flag for the the type of loading the last (or current) yielding was in 0 = no yielding yet, 1 = tension, 2 = compression
 	 
@@ -105,16 +123,17 @@ class shenSteel01 : public UniaxialMaterial
 	  double delta_in, Cdelta_in; //value of delta at the initial yield state in the current loading path
 	  
 	  // Updated upon unloading from plasticity
-	  double delta_y, Cdelta_y; //distance between bounding line and virtual bounding line
-//	  double localBucklingReferenceStrain, committedLocalBucklingReferenceStrain;
-//	  double localBucklingCyclicReduction, committedLocalBucklingCyclicReduction;
+	  double delta_yForT, Cdelta_yForT; //distance between bounding line and virtual bounding line used in tension
+	  double delta_yForC, Cdelta_yForC; //distance between bounding line and virtual bounding line used in compression
+	  double localBucklingReferenceStrain, committedLocalBucklingReferenceStrain;
+	  double localBucklingCyclicReduction, committedLocalBucklingCyclicReduction;
 	  
-//	  // local buckling state variables
-//	  double localBucklingConstantResidualStrain, committedLocalBucklingConstantResidualStrain; //strain at initiation of constant residual strength
-//  	  double localBucklingReferenceWork, committedLocalBucklingReferenceWork; // the accumulated plastic work a the initiation of the constant residual strength branch
-//  	  double localBucklingBaseConstantResidualStress, committedLocalBucklingBaseConstantResidualStress; // base constant residual local buckling stress (before cyclic reduction)
-//	  double localBucklingConstantResidualStress, committedLocalBucklingConstantResidualStress; //constant residual local buckling stress
-//	  double localBucklingBoundingStress, committedLocalBucklingBoundingStress; //local buckling bounding stress
+	  // local buckling state variables
+	  double localBucklingConstantResidualStrain, committedLocalBucklingConstantResidualStrain; //strain at initiation of constant residual strength
+  	  double localBucklingReferenceWork, committedLocalBucklingReferenceWork; // the accumulated plastic work a the initiation of the constant residual strength branch
+  	  double localBucklingBaseConstantResidualStress, committedLocalBucklingBaseConstantResidualStress; // base constant residual local buckling stress (before cyclic reduction)
+	  double localBucklingConstantResidualStress, committedLocalBucklingConstantResidualStress; //constant residual local buckling stress
+	  double localBucklingBoundingStress, committedLocalBucklingBoundingStress; //local buckling bounding stress
 };
 
 
