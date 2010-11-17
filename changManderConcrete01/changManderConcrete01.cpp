@@ -1659,13 +1659,18 @@ changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
 void 
 changManderConcrete01::Print(OPS_Stream &s, int flag)
 {
-	  s<<"changManderConcrete01, tag:"<<this->getTag()<<endln;
-	  s<<" Fcn:"<<Fc_n<<endln;
-	  s<<" Fcp:"<<Fc_p<<endln;
-	  s<<" Ec: "<<Ec<<endln;
-	  s<<" eo:"<<eo<<endln;
-	  // @todo put better stuff in to CCFT_concMaterial::Print(OPS_Stream &s, int flag)
-	  return;
+	s<<"changManderConcrete01, tag: "<<this->getTag()<<endln;
+	s<<" Ec:      "<<Ec<<endln;
+	s<<" Fcn:     "<<Fc_n<<endln;
+	s<<" ecn:     "<<ec_n<<endln;
+	s<<" rn_pre:  "<<r_n_pre<<endln;
+	s<<" rn_post: "<<r_n_post<<endln;
+	s<<" xcrn:    "<<x_n_cr<<endln;
+	s<<" Fcp:     "<<Fc_p<<endln;
+	s<<" ecp:     "<<ec_p<<endln;
+	s<<" rp:      "<<r_p<<endln;
+	s<<" xcrp:    "<<x_p_cr<<endln;
+	return;
 }
 
 

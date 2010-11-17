@@ -94,7 +94,7 @@ using namespace std;
 OPS_Export void
 localInit()
 {
-	  OPS_Error("shenSteel01 unaxial material written by Mark D. Denavit, University of Illinois at Urbana-Champaign \n", 1);
+  OPS_Error("shenSteel01 unaxial material \nWritten by Mark D Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
 }
 
 OPS_Export void *
@@ -315,7 +315,7 @@ shenSteel01::shenSteel01(int tag, double iA1, double iA2, double iA3,
 {
   Rlso = fy * ( alfa - a * exp( -bb * ep0 * 100 ) - ( alfa - a - 1 ) * exp( -c * ep0 * 100 ) );
   this->revertToStart();
-  if ( initStress <= Tls_n || initStress <= Tls_p ) {
+  if ( initStress <= Tls_n || initStress >= Tls_p ) {
 	  opserr << "WARNING initial stress is not in the elastic range, setting initial stress to zero \n";
 	  initStress = 0.0;
   }
@@ -1185,9 +1185,16 @@ shenSteel01::recvSelf(int cTag, Channel &theChannel,
 void 
 shenSteel01::Print(OPS_Stream &s, int flag)
 {
-	s << "shenSteel01 tag: " << this->getTag() << endln;
-	s << " Fy:" << fy << endln;
-	s << " Fu:" << fu << endln;
-	s << " Es: " << Ee << endln;
+	s<<"shenSteel01, tag: "<<this->getTag()<<endln;
+	s<<" Fy:      "<<fy<<endln;
+	s<<" Fu:      "<<fu<<endln;
+	s<<" Es:      "<<Ee<<endln;
+	s<<" kappaBar0: "<<Rbso<<" Ep0i: "<<Epoi<<" alpha: "<<alfa<<" a: "<<a<<" b: "<<bb<<" c: "<<c<<" omega: "<<w<<" zeta: "<<ksi<<" e: "<<e<<" f: "<<fE<< endln;
+	s<<" modelYieldPlateau: "<<modelYieldPlateau<<" M: "<<M<<" Epst: "<<Est<<" epst: "<<est<< endln;
+	s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<< endln;
+	s<<" modelLocalBuckling: "<<modelLocalBuckling<<" localBucklingStrain: "<<localBucklingStrain<<" Ksft: "<<Ksft<<" alphaFulb: "<<alphaFulb<<" refFulb: "<<refFulb<< endln;
+	s<<" modelDegradeEp: "<<modelDegradeEp<<" degradeEpRate: "<<degradeEpRate<<" degradeEpLimit: "<<degradeEpLimit<< endln;
+	s<<" modelDegradeKappa: "<<modelDegradeKappa<<" degradeKappaRate: "<<degradeKappaRate<<" degradeKappaLimit: "<<degradeKappaLimit<< endln;
+	s<<" modelDegradeFulb: "<<modelDegradeFulb<<" degradeFulbRate: "<<degradeFulbRate<<" degradeFulbLimit: "<<degradeFulbLimit<< endln;
 	return;
 }
