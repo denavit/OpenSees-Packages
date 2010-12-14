@@ -21,7 +21,7 @@
 // $Revision: 1.1 $
 // $Date: 2010-05-04 17:14:46 $
 // $Source: /scratch/slocal/chroot/cvsroot/openseescomp/CompositePackages/mixedBeamColumn3d/mixedBeamColumn3d.h,v $
-                                                                        
+
 #ifndef mixedBeamColumn3d_h
 #define mixedBeamColumn3d_h
 
@@ -36,9 +36,8 @@
 #include <Matrix.h>
 #include <Vector.h>
 
-//#include <BeamIntegration.h>
-//#include <SectionForceDeformation.h>
-#include <FiberSectionGJ.h> // @todo Make the element work for e 
+#include <BeamIntegration.h>
+#include <SectionForceDeformation.h>
 #include <CrdTransf.h>
 
 class Node;
@@ -46,18 +45,17 @@ class Channel;
 class Response;
 class BeamIntegration;
 class SectionForceDeformation;
-//class FiberSectionGJ
-//class CrdTransf3d
+
 
 #define ELE_TAG_mixedBeamColumn3d 30765
 
 class mixedBeamColumn3d : public Element
 {
   public:
-	  // constructors 
+    // constructors
     mixedBeamColumn3d (int tag, int nodeI, int nodeJ,
-		    int numSections, FiberSectionGJ *sectionPtrs[], BeamIntegration &bi,
-		    CrdTransf &coordTransf, double massDensPerUnitLength);
+            int numSections, SectionForceDeformation **sectionPtrs, BeamIntegration &bi,
+            CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh);
     mixedBeamColumn3d ();
 
     // destructor
@@ -96,29 +94,35 @@ class mixedBeamColumn3d : public Element
   protected:
   
   private:
-	// private member functions - only available to objects of the class
-	Matrix getNld_hat(int sec, const Vector &v, double L);
-	Vector getd_hat(int sec, const Vector &v, double L);
-	Matrix getNd1(int sec, const Vector &v, double L);
-	Matrix getNd2(int sec, double P, double L);
-	Matrix getKg(int sec, double P, double L);  
-	  
-    // private attributes - a copy for each object of the class
-	ID connectedExternalNodes; // tags of the end nodes
-    Node *theNodes[2];   // pointers to the nodes
-	BeamIntegration *beamIntegr;
-    int numSections;
-    FiberSectionGJ **sections;          // array of pointers to sections
-    CrdTransf *crdTransf;        // pointer to coordinate tranformation object
+    // Private Functions - Shape Functions
+    Matrix getNld_hat(int sec, const Vector &v, double L);
+    Vector getd_hat(int sec, const Vector &v, double L);
+    Matrix getNd1(int sec, const Vector &v, double L);
+    Matrix getNd2(int sec, double P, double L);
+    Matrix getKg(int sec, double P, double L);
 
-    double rho;                    // mass density per unit length
-    double deflength;
-    double lengthLastIteration;		// the deformed length of the element in the last iteration
-    double lengthLastStep;		  	// the deformed length of the element at the end of the last step
-    double initialLength;
+    // Private Functions - Interaction With The Sections
+    void getSectionTangent(int sec,int type,Matrix &kSection,double &GJ);
+    void getSectionStress(int sec,Vector &fSection,double &torsion);
+    void setSectionDeformation(int sec,Vector &defSection,double &twist);
 
-    int initialFlag;            // indicates if the element has been initialized
-    int initialFlagB;  // indicates if the inital local matricies need to be computed
+    // Private Attributes - a copy for each object of the class
+    ID connectedExternalNodes;              // tags of the end nodes
+    Node *theNodes[2];                      // pointers to the nodes
+    BeamIntegration *beamIntegr;            //
+    int numSections;                        //
+    SectionForceDeformation **sections;     // array of pointers to sections
+    CrdTransf *crdTransf;                   // pointer to coordinate transformation object
+
+    int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
+    double rho;                             // mass density per unit length
+    double deflength;                       //
+    double lengthLastIteration;             // the deformed length of the element in the last iteration
+    double lengthLastStep;                  // the deformed length of the element at the end of the last step
+    double initialLength;                   //
+
+    int initialFlag;                        // indicates if the element has been initialized
+    int initialFlagB;                       // indicates if the initial local matrices need to be computed
     int itr;
     int cnvg;
         
@@ -136,8 +140,8 @@ class mixedBeamColumn3d : public Element
     Matrix commitedHinv;
     Matrix GMH;
     Matrix commitedGMH;
-    Matrix kv;                     // stiffness matrix in the basic system
-    Matrix kvcommit;               // commited stiffness matrix in the basic system
+    Matrix kv;                     			// stiffness matrix in the basic system
+	Matrix kvcommit;               			// Committed stiffness matrix in the basic system
     
     Matrix *Ki;
     
@@ -155,14 +159,10 @@ class mixedBeamColumn3d : public Element
     static double workArea[];
     static Matrix transformNaturalCoords; 
     static Matrix transformNaturalCoordsT;
-    	// matrix to transform the natural coordinates from what the coordinate transformation uses and what the element uses 	
+        // matrix to transform the natural coordinates from what the coordinate transformation uses and what the element uses
     
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
-    static Matrix *ks;                    // array of section stiffness matrices
-    static Matrix *fs;
-    static Matrix *ksa;
-    static Matrix *fsa;
     static Matrix *nldhat;
     static Matrix *nldhatT;
     static Matrix *nd1; 
