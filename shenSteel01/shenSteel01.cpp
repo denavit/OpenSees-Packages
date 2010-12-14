@@ -660,60 +660,38 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 
 
 	// Determine status w.r.t. the local buckling model
-	if ( commitedLocalBucklingHistory == 0 ) {
-		// Detect first local buckling using a strain measure (but stress must also be lower than a certain amount)
-		double stressForLocalBuckling;
-		stressForLocalBuckling = -1*alphaFulb*max(localBucklingStrain*Ee,-fy);
+	if ( modelLocalBuckling ) {
+		if ( commitedLocalBucklingHistory == 0 ) {
+			// Detect first local buckling using a strain measure (but stress must also be lower than a certain amount)
+			double stressForLocalBuckling;
+			stressForLocalBuckling = -1*alphaFulb*max(localBucklingStrain*Ee,-fy);
 
-		if ( trialStrain <= (localBucklingStrain+localBucklingReferenceStrain) && trialStress <= stressForLocalBuckling ) {
-			// Local buckling has initiated
+			if ( trialStrain <= (localBucklingStrain+localBucklingReferenceStrain) && trialStress <= stressForLocalBuckling ) {
+				// Local buckling has initiated
 
-			if ( committedStrain <= (localBucklingStrain+localBucklingReferenceStrain) ) {
-				// if it could have buckled before but didn't because of the stress constraint
-				localBucklingBaseConstantResidualStress = stressForLocalBuckling;
-				localBucklingConstantResidualStress = localBucklingBaseConstantResidualStress;
-				localBucklingStatus = 2;
-			} else {
-				// if it has achieved higher than the constant residual stress using fy
-
-				// determine the new local buckling bounding stress
-				double strainBeforeLocalBuckling = (localBucklingStrain+localBucklingReferenceStrain) - committedStrain;
-				double stressAtLocalBuckling = committedStress + strainBeforeLocalBuckling*trialTangent;
-
-				if ( stressAtLocalBuckling >= stressForLocalBuckling ) {
-					// the stress must have reached at least -1*frs*fy
-					stressAtLocalBuckling = stressForLocalBuckling;
-				}
-
-				// compute the constant local buckling residual stress
-				localBucklingBaseConstantResidualStress = alphaFulb*stressAtLocalBuckling;
-				localBucklingConstantResidualStress = localBucklingBaseConstantResidualStress;
-
-				// strain at which constant residual stress begins
-				localBucklingConstantResidualStrain = (localBucklingStrain+localBucklingReferenceStrain) - (stressAtLocalBuckling-localBucklingConstantResidualStress)/Ksft;
-
-				// determine what branch of local buckling the material is in
-				if ( trialStrain > localBucklingConstantResidualStrain ) {
-					localBucklingStatus = 1;
-				} else {
+				if ( committedStrain <= (localBucklingStrain+localBucklingReferenceStrain) ) {
+					// if it could have buckled before but didn't because of the stress constraint
+					localBucklingBaseConstantResidualStress = stressForLocalBuckling;
+					localBucklingConstantResidualStress = localBucklingBaseConstantResidualStress;
 					localBucklingStatus = 2;
-				}
-			}
-		} else {
-			localBucklingStatus = 0;
-		}
-	} else {
-		switch ( commitedLocalBucklingStatus ) {
-		case 0 :
-			// Detect subsequent local buckling using a stress measure
-			if ( trialStress < localBucklingBoundingStress ) {
-				switch ( commitedLocalBucklingHistory ) {
-				case 1:
-					// strain at which constant residual stress begins
-					{
-					double strainAtStartOfLB = committedStrain + (localBucklingBoundingStress-committedStress)/trialTangent;
-					localBucklingConstantResidualStrain = strainAtStartOfLB - (localBucklingBoundingStress-localBucklingConstantResidualStress)/Ksft;
+				} else {
+					// if it has achieved higher than the constant residual stress using fy
+
+					// determine the new local buckling bounding stress
+					double strainBeforeLocalBuckling = (localBucklingStrain+localBucklingReferenceStrain) - committedStrain;
+					double stressAtLocalBuckling = committedStress + strainBeforeLocalBuckling*trialTangent;
+
+					if ( stressAtLocalBuckling >= stressForLocalBuckling ) {
+						// the stress must have reached at least -1*frs*fy
+						stressAtLocalBuckling = stressForLocalBuckling;
 					}
+
+					// compute the constant local buckling residual stress
+					localBucklingBaseConstantResidualStress = alphaFulb*stressAtLocalBuckling;
+					localBucklingConstantResidualStress = localBucklingBaseConstantResidualStress;
+
+					// strain at which constant residual stress begins
+					localBucklingConstantResidualStrain = (localBucklingStrain+localBucklingReferenceStrain) - (stressAtLocalBuckling-localBucklingConstantResidualStress)/Ksft;
 
 					// determine what branch of local buckling the material is in
 					if ( trialStrain > localBucklingConstantResidualStrain ) {
@@ -721,78 +699,101 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 					} else {
 						localBucklingStatus = 2;
 					}
-					break;
-
-				case 2:
-					localBucklingStatus = 2;
-					break;
-
-				default :
-					// It should not arrive here
-					opserr << "Trouble in shenSteel01::setTrialStrain (3) \n";
-					return -1;
-					break;
 				}
 			} else {
 				localBucklingStatus = 0;
 			}
-			break;
+		} else {
+			switch ( commitedLocalBucklingStatus ) {
+			case 0 :
+				// Detect subsequent local buckling using a stress measure
+				if ( trialStress < localBucklingBoundingStress ) {
+					switch ( commitedLocalBucklingHistory ) {
+					case 1:
+						// strain at which constant residual stress begins
+						{
+						double strainAtStartOfLB = committedStrain + (localBucklingBoundingStress-committedStress)/trialTangent;
+						localBucklingConstantResidualStrain = strainAtStartOfLB - (localBucklingBoundingStress-localBucklingConstantResidualStress)/Ksft;
+						}
 
-		case 1 :
-			if ( strainIncrement > 0.0 ) {
-				localBucklingStatus = 0;
-			} else {
-				// determine what branch of local buckling the material is in
-				if ( trialStrain > localBucklingConstantResidualStrain ) {
-					localBucklingStatus = 1;
+						// determine what branch of local buckling the material is in
+						if ( trialStrain > localBucklingConstantResidualStrain ) {
+							localBucklingStatus = 1;
+						} else {
+							localBucklingStatus = 2;
+						}
+						break;
+
+					case 2:
+						localBucklingStatus = 2;
+						break;
+
+					default :
+						// It should not arrive here
+						opserr << "Trouble in shenSteel01::setTrialStrain (3) \n";
+						return -1;
+						break;
+					}
+				} else {
+					localBucklingStatus = 0;
+				}
+				break;
+
+			case 1 :
+				if ( strainIncrement > 0.0 ) {
+					localBucklingStatus = 0;
+				} else {
+					// determine what branch of local buckling the material is in
+					if ( trialStrain > localBucklingConstantResidualStrain ) {
+						localBucklingStatus = 1;
+					} else {
+						localBucklingStatus = 2;
+					}
+				}
+				break;
+
+			case 2 :
+				if ( strainIncrement > 0.0 ) {
+					localBucklingStatus = 0;
 				} else {
 					localBucklingStatus = 2;
 				}
+				break;
+
+			default :
+				// It should not arrive here
+				opserr << "Trouble in shenSteel01::setTrialStrain (4) \n";
+				return -1;
+				break;
 			}
+		}
+
+		// Set trial stress and tangent if it is locally buckled
+		switch ( localBucklingStatus ) {
+		case 0 :
+			break;
+
+		case 1 :
+			trialStress = localBucklingConstantResidualStress + Ksft*(trialStrain - localBucklingConstantResidualStrain );
+			trialTangent = Ksft;
+			localBucklingHistory = 1;
+			localBucklingBoundingStress = trialStress;
 			break;
 
 		case 2 :
-			if ( strainIncrement > 0.0 ) {
-				localBucklingStatus = 0;
-			} else {
-				localBucklingStatus = 2;
-			}
+			trialStress = localBucklingConstantResidualStress;
+			trialTangent = 0.0;
+			localBucklingHistory = 2;
+			localBucklingBoundingStress = trialStress;
 			break;
 
 		default :
 			// It should not arrive here
-			opserr << "Trouble in shenSteel01::setTrialStrain (4) \n";
+			opserr << "Trouble in shenSteel01::setTrialStrain (5) \n";
 			return -1;
 			break;
 		}
 	}
-
-	// Set trial stress and tangent if it is locally buckled
-	switch ( localBucklingStatus ) {
-	case 0 :
-		break;
-
-	case 1 :
-		trialStress = localBucklingConstantResidualStress + Ksft*(trialStrain - localBucklingConstantResidualStrain );
-		trialTangent = Ksft;
-		localBucklingHistory = 1;
-		localBucklingBoundingStress = trialStress;
-		break;
-
-	case 2 :
-		trialStress = localBucklingConstantResidualStress;
-		trialTangent = 0.0;
-		localBucklingHistory = 2;
-		localBucklingBoundingStress = trialStress;
-		break;
-
-	default :
-		// It should not arrive here
-		opserr << "Trouble in shenSteel01::setTrialStrain (5) \n";
-		return -1;
-		break;
-	}
-	
 
 	// Update state variables
 
@@ -810,13 +811,13 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 	}
 	dep = ep - Cep;
 	W = W + fmax(trialStress*dep,0);
-	if ( localBucklingHistory == 2 && commitedLocalBucklingHistory != 2)
+	if ( modelLocalBuckling && localBucklingHistory == 2 && commitedLocalBucklingHistory != 2)
 		localBucklingReferenceWork = W;
 
 	// Size of the Bounding Surface
 	Tbs_p =   ( fu + ( Rbso - fu ) * exp ( - pow( fy / Ee, -2 )* ksi  * pow ( 0.5 * ebar_p, 2 ) ) );
 	Tbs_n = - ( fu + ( Rbso - fu ) * exp ( - pow( fy / Ee, -2 )* ksi  * pow ( 0.5 * ebar_p, 2 ) ) );
-	if ( localBucklingHistory != 0 && Tbs_n > localBucklingBoundingStress ) {
+	if ( modelLocalBuckling && localBucklingHistory != 0 && Tbs_n > localBucklingBoundingStress ) {
 		Tbs_n = localBucklingBoundingStress;
 	}
 
@@ -827,7 +828,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			// Moving in the compressive or negative direction
 			Tls_n = trialStress;
 			Rls = Rlso * ( alfa - a * exp( -bb * ebar_p * 100 ) - ( alfa - a - 1 ) * exp( -c * ebar_p * 100 ) );
-			if( modelDegradeKappa == true && localBucklingHistory != 0 ) {
+			if( modelLocalBuckling && modelDegradeKappa == true && localBucklingHistory != 0 ) {
 				double reduction = ( 1.0 - degradeKappaRate * sqrt( W / fy ) ); // @todo - maybe have (W-refW)
 				if ( reduction < degradeKappaLimit ) reduction = degradeKappaLimit;
 				Rls = Rls * reduction;
