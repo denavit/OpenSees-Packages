@@ -22,14 +22,6 @@
 // $Date: 2010-05-04 17:14:45 $
 // $Source: /scratch/slocal/chroot/cvsroot/openseescomp/CompositePackages/mixedBeamColumn2d/mixedBeamColumn2d.cpp,v $
                                                                         
-// Written: Mark D. Denavit, University of Illinois at Urbana-Champaign 
-//
-// Description: This file contains the implementation for the mixedBeamColumn2d class.
-//
-// What: "@(#) mixedBeamColumn2d.C, revA"
-
-
-// we specify what header files we need
 #include "mixedBeamColumn2d.h"
 #include <elementAPI.h>
 #include <G3Globals.h>
@@ -53,17 +45,21 @@
 #include <fstream>
 #include <Node.h>
 #include <Message.h>
+
 #include <LobattoBeamIntegration.h>
+#include <LegendreBeamIntegration.h>
+#include <RadauBeamIntegration.h>
+#include <NewtonCotesBeamIntegration.h>
+#include <TrapezoidalBeamIntegration.h>
+#include <RegularizedHingeIntegration.h>
 
-
-#define  NDM   2         // dimension of the problem (3d)
-#define  NL    2         // size of uniform load vector
-#define  NND   3         // number of nodal dof's
-#define  NEGD  6        // number of element global dof's
-#define  NUM_SECTION_DISPLACEMENTS_WITH_TORSION  2
-#define  NUM_NATURAL_DISPLACEMENTS_WITH_TORSION  3 // number of element dof's in the basic system
-#define  NUM_SECTION_DISPLACEMENTS  2
-#define  NUM_NATRUAL_DISPLACEMENTS  3
+// Constants that define the dimensionality
+#define  NDM   2                      // dimension of the problem (2d)
+#define  NND   3                      // number of nodal dof's
+#define  NEGD  6                      // number of element global dof's
+#define  NDM_SECTION  2               // number of section dof's without torsio
+#define  NDM_NATURAL  3               // number of element dof's in the basic system without torsion
+#define  NDM_NATURAL_WITH_TORSION  3  // number of element dof's in the basic system with torsion
 
 #define  NUKALA_NN_ALGORITHM 1  // code for Nukala's NN algorithm
 #define  NUKALA_LL_ALGORITHM 2  // code for Nukala's LL algorithm
@@ -75,15 +71,11 @@ using namespace std;
 Matrix mixedBeamColumn2d::theMatrix(NEGD,NEGD);
 Vector mixedBeamColumn2d::theVector(NEGD);
 double mixedBeamColumn2d::workArea[400];
-Matrix mixedBeamColumn2d::transformNaturalCoords(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION);
-Matrix mixedBeamColumn2d::transformNaturalCoordsT(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION);
+Matrix mixedBeamColumn2d::transformNaturalCoords(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION);
+Matrix mixedBeamColumn2d::transformNaturalCoordsT(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION);
 int mixedBeamColumn2d::maxNumSections = 10;
 
 Vector *mixedBeamColumn2d::sectionDefShapeFcn = 0;
-Matrix *mixedBeamColumn2d::ks = 0;
-Matrix *mixedBeamColumn2d::fs = 0;
-Matrix *mixedBeamColumn2d::ksa = 0;
-Matrix *mixedBeamColumn2d::fsa = 0;
 Matrix *mixedBeamColumn2d::nldhat = 0;
 Matrix *mixedBeamColumn2d::nldhatT = 0;
 Matrix *mixedBeamColumn2d::nd1 = 0;
@@ -117,7 +109,20 @@ localInit()
 //   $iNode, $jNode         end nodes
 //   $numIntgrPts 			number of integration points along the element length
 //   $secTag 				identifier for previously-defined section object
-//   $transfTags  			identifier for previously-defined coordinate-transformation (CrdTransf) object
+//   $transfTag   			identifier for previously-defined coordinate-transformation (CrdTransf) object
+//
+//
+// Optional Input:
+//   -mass $massDens
+//       $massDens          element mass density (per unit length), from which a lumped-mass matrix is formed (optional, default=0.0)
+//   -integration $intType
+//       $intType           numerical integration type, options are Lobotto, Legendre, Radau, NewtonCotes, Trapezoidal (optional, default= Lobotto)
+//   -doRayleigh $rFlag
+//       $rFlag             optional, default = 1
+//                              rFlag = 0 no rayleigh damping
+//                              rFlag = 1 include rayleigh damping (default)
+//   -geomLinear            perform analysis without internal geometric nonlinearity
+//
 //
 // References:
 //   1. Bulent N. Alemdar and Donald W. White, “Displacement, Flexibility, and Mixed Beam-Column Finite
@@ -135,8 +140,12 @@ localInit()
 OPS_Export void *
 OPS_mixedBeamColumn2d()
 {
-  // get the id and end nodes 
-  int iData[6];
+  // Variables to retrieve input
+  int iData[10];
+  double dData[10];
+  int sDataLength = 40;
+  char *sData  = new char[sDataLength];
+  char *sData2 = new char[sDataLength];
   int numData;
 
   // Check the number of dimensions
@@ -167,37 +176,103 @@ OPS_mixedBeamColumn2d()
   int nodeI = iData[1];
   int nodeJ = iData[2];
   int numIntgrPts = iData[3];
+  int secTag = iData[4];
+  int transfTag = iData[5];
 
   // Get the section
-  int secTag = iData[4];
   SectionForceDeformation *theSection = OPS_GetSectionForceDeformation(secTag);
-  
   if (theSection == 0) {
     opserr << "WARNING section with tag " << secTag << "not found for element " << eleTag << endln;
     return 0;
   }
 
-  FiberSectionGJ **sections = new FiberSectionGJ *[numIntgrPts];
+  SectionForceDeformation **sections = new SectionForceDeformation *[numIntgrPts];
   for (int i = 0; i < numIntgrPts; i++)
-    sections[i] = (FiberSectionGJ*) theSection;
-  
+    sections[i] = theSection;
   
   // Get the coordinate transformation
-  int transfTag = iData[5];
   CrdTransf *theTransf = OPS_GetCrdTransfPtr(transfTag);
-
   if (theTransf == 0) {
     opserr << "WARNING geometric transformation with tag " << transfTag << "not found for element " << eleTag << endln;
     return 0;
   }
 
-  
-  LobattoBeamIntegration beamIntegr;
-  
+
+  // Set Default Values for Optional Input
+  int doRayleigh = 1;
   double massDens = 0.0;
+  bool geomLinear = false;
+  BeamIntegration *beamIntegr = 0;
+  
+  // Loop through remaining arguments to get optional input
+  while ( OPS_GetNumRemainingInputArgs() > 0 ) {
+	  if ( OPS_GetString(sData, sDataLength) != 0 ) {
+		  opserr << "WARNING invalid input";
+		  return 0;
+	  }
+
+	  if ( strcmp(sData,"-mass") == 0 ) {
+		  numData = 1;
+		  if (OPS_GetDoubleInput(&numData, dData) != 0) {
+			opserr << "WARNING invalid input, want: -mass $massDens \n";
+			return 0;
+		  }
+		  massDens = dData[0];
+
+	  } else if ( strcmp(sData,"-integration") == 0 ) {
+		  if ( OPS_GetString(sData2, sDataLength) != 0 ) {
+			  opserr << "WARNING invalid input, want: -integration $intType";
+			  return 0;
+		  }
+
+		  if (strcmp(sData2,"Lobatto") == 0) {
+		    beamIntegr = new LobattoBeamIntegration();
+		  } else if (strcmp(sData2,"Legendre") == 0) {
+		    beamIntegr = new LegendreBeamIntegration();
+		  } else if (strcmp(sData2,"Radau") == 0) {
+		    beamIntegr = new RadauBeamIntegration();
+		  } else if (strcmp(sData2,"NewtonCotes") == 0) {
+		    beamIntegr = new NewtonCotesBeamIntegration();
+		  } else if (strcmp(sData2,"Trapezoidal") == 0) {
+		    beamIntegr = new TrapezoidalBeamIntegration();
+		  } else if (strcmp(sData2,"RegularizedLobatto") == 0 || strcmp(sData2,"RegLobatto") == 0) {
+			numData = 4;
+			if (OPS_GetDoubleInput(&numData, dData) != 0) {
+			  opserr << "WARNING invalid input, want: -integration RegularizedLobatto $lpI $lpJ $zetaI $zetaJ \n";
+			  return 0;
+			}
+			BeamIntegration *otherBeamInt = 0;
+			otherBeamInt = new LobattoBeamIntegration();
+			beamIntegr = new RegularizedHingeIntegration(*otherBeamInt, dData[0], dData[1], dData[2], dData[3]);
+		    if (otherBeamInt != 0)
+		      delete otherBeamInt;
+		  } else {
+			opserr << "WARNING invalid integration type, element: " << eleTag;
+			return 0;
+		  }
+
+	  } else if ( strcmp(sData,"-doRayleigh") == 0 ) {
+	      numData = 1;
+	      if (OPS_GetInt(&numData, &doRayleigh) != 0) {
+	        opserr << "WARNING: Invalid doRayleigh in element mixedBeamColumn3d " << eleTag;
+	        return 0;
+	      }
+
+	  } else if ( strcmp(sData,"-geomLinear") == 0 ) {
+		  geomLinear = true;
+
+	  } else {
+		  opserr << "WARNING unknown option " << sData << "\n";
+	  }
+  }
+
+  // Set the beam integration object if not in options
+  if (beamIntegr == 0)
+    beamIntegr = new LobattoBeamIntegration();
+  
   
   // now create the element and add it to the Domain
-  Element *theElement = new mixedBeamColumn2d(eleTag, nodeI, nodeJ, numIntgrPts, sections, beamIntegr, *theTransf, massDens);
+  Element *theElement = new mixedBeamColumn2d(eleTag, nodeI, nodeJ, numIntgrPts, sections, *beamIntegr, *theTransf, massDens, doRayleigh, geomLinear);
   
   if (theElement == 0) {
     opserr << "WARNING ran out of memory creating element with tag " << eleTag << endln;
@@ -211,20 +286,20 @@ OPS_mixedBeamColumn2d()
 // constructor which takes the unique element tag, sections,
 // and the node ID's of it's nodal end points.
 // allocates the necessary space needed by each object
-mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec, FiberSectionGJ **sec,
-				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength):
+mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec, SectionForceDeformation **sec,
+				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength, int damp, bool geomLin):
   Element(tag,ELE_TAG_mixedBeamColumn2d), 
-  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0),
+  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(damp), geomLinear(geomLin),
   rho(massDensPerUnitLength), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
   initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
-  V(NUM_NATRUAL_DISPLACEMENTS), committedV(NUM_NATRUAL_DISPLACEMENTS), 
-  internalForceOpenSees(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), committedInternalForceOpenSees(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), 
-  naturalForce(NUM_NATRUAL_DISPLACEMENTS), commitedNaturalForce(NUM_NATRUAL_DISPLACEMENTS), 
-  lastNaturalDisp(NUM_NATRUAL_DISPLACEMENTS), commitedLastNaturalDisp(NUM_NATRUAL_DISPLACEMENTS), 
-  c(NUM_NATRUAL_DISPLACEMENTS), commitedC(NUM_NATRUAL_DISPLACEMENTS), 
-  Hinv(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), commitedHinv(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), 
-  GMH(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), commitedGMH(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), 
-  kv(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), kvcommit(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), 
+  V(NDM_NATURAL), committedV(NDM_NATURAL),
+  internalForceOpenSees(NDM_NATURAL_WITH_TORSION), committedInternalForceOpenSees(NDM_NATURAL_WITH_TORSION),
+  naturalForce(NDM_NATURAL), commitedNaturalForce(NDM_NATURAL),
+  lastNaturalDisp(NDM_NATURAL), commitedLastNaturalDisp(NDM_NATURAL),
+  c(NDM_NATURAL), commitedC(NDM_NATURAL),
+  Hinv(NDM_NATURAL,NDM_NATURAL), commitedHinv(NDM_NATURAL,NDM_NATURAL),
+  GMH(NDM_NATURAL,NDM_NATURAL), commitedGMH(NDM_NATURAL,NDM_NATURAL),
+  kv(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION), kvcommit(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION),
   Ki(0),
   sectionForceFibers(0), commitedSectionForceFibers(0), sectionDefFibers(0), commitedSectionDefFibers(0),
   sectionFlexibility(0), commitedSectionFlexibility(0)  
@@ -261,7 +336,7 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
      opserr << "Error: mixedBeamColumn2d::setSectionPointers -- invalid section pointer";
    }
 
-   sections = new FiberSectionGJ *[numSections];
+   sections = new SectionForceDeformation *[numSections];
    if (sections == 0) {
      opserr << "Error: mixedBeamColumn2d::setSectionPointers -- could not allocate section pointers";
    }
@@ -272,7 +347,7 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
        opserr << "Error: mixedBeamColumn2d::setSectionPointers -- null section pointer " << i << endln;
      }
 
-     sections[i] = (FiberSectionGJ*) sec[i]->getCopy();
+     sections[i] = (SectionForceDeformation*) sec[i]->getCopy();
 
      if (sections[i] == 0) {
        opserr << "Error: mixedBeamColumn2d::setSectionPointers -- could not create copy of section " << i << endln;
@@ -291,12 +366,12 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
 
    for (int i = 0; i < numSections; i++){     
          // Mark's Variables
-         sectionForceFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-         commitedSectionForceFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-         sectionDefFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-         commitedSectionDefFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-         sectionFlexibility[i] = Matrix(NUM_SECTION_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
-         commitedSectionFlexibility[i] = Matrix(NUM_SECTION_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
+         sectionForceFibers[i] = Vector(NDM_SECTION);
+         commitedSectionForceFibers[i] = Vector(NDM_SECTION);
+         sectionDefFibers[i] = Vector(NDM_SECTION);
+         commitedSectionDefFibers[i] = Vector(NDM_SECTION);
+         sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
+         commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
    }
    
    for(int i = 0; i < numSec; i++){
@@ -340,14 +415,6 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
    
    if (sectionDefShapeFcn == 0)
 	   sectionDefShapeFcn  = new Vector [maxNumSections];
-   if (ks == 0) 
-	   ks  = new Matrix [maxNumSections];
-   if (fs == 0) 
-	   fs  = new Matrix [maxNumSections];
-   if (ksa == 0) 
-	   ksa  = new Matrix [maxNumSections];
-   if (fsa == 0) 
-	   fsa  = new Matrix [maxNumSections];
    if (nldhat == 0) 
 	   nldhat  = new Matrix [maxNumSections];
    if (nldhatT == 0) 
@@ -360,16 +427,16 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
 	   nd1T  = new Matrix [maxNumSections];
    if (nd2T == 0) 
 	   nd2T  = new Matrix [maxNumSections];
-   if (!sectionDefShapeFcn || !ks || !fs || !ksa || !fsa || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
+   if (!sectionDefShapeFcn || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
      opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";   
      exit(-1);
    }
    
    int i;
    for ( i=0; i<maxNumSections; i++ ){
- 	  nldhatT[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
- 	  nd1T[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
- 	  nd2T[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
+ 	  nldhatT[i] = Matrix(NDM_NATURAL,NDM_SECTION);
+ 	  nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
+ 	  nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
    }
 }
 
@@ -379,17 +446,17 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
 
 mixedBeamColumn2d::mixedBeamColumn2d():
   Element(0,ELE_TAG_mixedBeamColumn2d), 
-  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0),
+  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(0), geomLinear(false),
   rho(0.0), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
   initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
-  V(NUM_NATRUAL_DISPLACEMENTS), committedV(NUM_NATRUAL_DISPLACEMENTS), 
-  internalForceOpenSees(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), committedInternalForceOpenSees(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), 
-  naturalForce(NUM_NATRUAL_DISPLACEMENTS), commitedNaturalForce(NUM_NATRUAL_DISPLACEMENTS), 
-  lastNaturalDisp(NUM_NATRUAL_DISPLACEMENTS), commitedLastNaturalDisp(NUM_NATRUAL_DISPLACEMENTS), 
-  c(NUM_NATRUAL_DISPLACEMENTS), commitedC(NUM_NATRUAL_DISPLACEMENTS), 
-  Hinv(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), commitedHinv(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), 
-  GMH(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), commitedGMH(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS), 
-  kv(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), kvcommit(NUM_NATURAL_DISPLACEMENTS_WITH_TORSION,NUM_NATURAL_DISPLACEMENTS_WITH_TORSION), 
+  V(NDM_NATURAL), committedV(NDM_NATURAL),
+  internalForceOpenSees(NDM_NATURAL_WITH_TORSION), committedInternalForceOpenSees(NDM_NATURAL_WITH_TORSION),
+  naturalForce(NDM_NATURAL), commitedNaturalForce(NDM_NATURAL),
+  lastNaturalDisp(NDM_NATURAL), commitedLastNaturalDisp(NDM_NATURAL),
+  c(NDM_NATURAL), commitedC(NDM_NATURAL),
+  Hinv(NDM_NATURAL,NDM_NATURAL), commitedHinv(NDM_NATURAL,NDM_NATURAL),
+  GMH(NDM_NATURAL,NDM_NATURAL), commitedGMH(NDM_NATURAL,NDM_NATURAL),
+  kv(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION), kvcommit(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION),
   Ki(0),
   sectionForceFibers(0), commitedSectionForceFibers(0), sectionDefFibers(0), commitedSectionDefFibers(0),
   sectionFlexibility(0), commitedSectionFlexibility(0)  
@@ -406,12 +473,12 @@ mixedBeamColumn2d::mixedBeamColumn2d():
   
 
   for (int i = 0; i < numSections; i++){     
-        sectionForceFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-        commitedSectionForceFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-        sectionDefFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-        commitedSectionDefFibers[i] = Vector(NUM_SECTION_DISPLACEMENTS);
-        sectionFlexibility[i] = Matrix(NUM_SECTION_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
-        commitedSectionFlexibility[i] = Matrix(NUM_SECTION_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
+        sectionForceFibers[i] = Vector(NDM_SECTION);
+        commitedSectionForceFibers[i] = Vector(NDM_SECTION);
+        sectionDefFibers[i] = Vector(NDM_SECTION);
+        commitedSectionDefFibers[i] = Vector(NDM_SECTION);
+        sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
+        commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
   }
   
   for(int i = 0; i < numSections; i++){
@@ -454,14 +521,6 @@ mixedBeamColumn2d::mixedBeamColumn2d():
   
   if (sectionDefShapeFcn == 0)
 	   sectionDefShapeFcn  = new Vector [maxNumSections];
-  if (ks == 0) 
-	   ks  = new Matrix [maxNumSections];
-  if (fs == 0) 
-	   fs  = new Matrix [maxNumSections];
-  if (ksa == 0) 
-	   ksa  = new Matrix [maxNumSections];
-  if (fsa == 0) 
-	   fsa  = new Matrix [maxNumSections];
   if (nldhat == 0) 
 	   nldhat  = new Matrix [maxNumSections];
   if (nldhatT == 0) 
@@ -474,16 +533,16 @@ mixedBeamColumn2d::mixedBeamColumn2d():
 	   nd1T  = new Matrix [maxNumSections];
   if (nd2T == 0) 
 	   nd2T  = new Matrix [maxNumSections];
-  if (!sectionDefShapeFcn || !ks || !fs || !ksa || !fsa || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
+  if (!sectionDefShapeFcn || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
     opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";   
     exit(-1);
   }
   
   int i;
   for ( i=0; i<maxNumSections; i++ ){
-	  nldhatT[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
-	  nd1T[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
-	  nd2T[i] = Matrix(NUM_NATRUAL_DISPLACEMENTS,NUM_SECTION_DISPLACEMENTS);
+	  nldhatT[i] = Matrix(NDM_NATURAL,NDM_SECTION);
+	  nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
+	  nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
   }
   
 }
@@ -762,7 +821,7 @@ mixedBeamColumn2d::getInitialStiff(void)
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
   
   // Vector of zeros to use at inital natural dispalcements
-  Vector myZeros(NUM_NATRUAL_DISPLACEMENTS);
+  Vector myZeros(NDM_NATURAL);
   myZeros.Zero();
  
   // Set inital shape functions 
@@ -771,28 +830,32 @@ mixedBeamColumn2d::getInitialStiff(void)
     nd1[i] = this->getNd1(i, myZeros, initialLength);
     nd2[i] = this->getNd2(i, 0, initialLength);
 
-    for( j = 0; j < NUM_SECTION_DISPLACEMENTS; j++ ){
-      for( k = 0; k < NUM_NATRUAL_DISPLACEMENTS; k++ ){
+    for( j = 0; j < NDM_SECTION; j++ ){
+      for( k = 0; k < NDM_NATURAL; k++ ){
         nd1T[i](k,j) = nd1[i](j,k);
         nd2T[i](k,j) = nd2[i](j,k);
       }
    	}
   }  	
   
-  // Set inital and section flexibility and GJ
+  // Set initial and section flexibility and GJ
   for ( i = 0; i < numSections; i++ ){
-	Matrix sectionTangent = sections[i]->getInitialTangent();
-  	invertMatrix(NUM_SECTION_DISPLACEMENTS,sectionTangent,sectionFlexibility[i]);
+	Matrix ks(NDM_SECTION,NDM_SECTION);
+	getSectionTangent(i,2,ks);
+	invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+
+	//Matrix sectionTangent = sections[i]->getInitialTangent();
+  	//invertMatrix(NDM_SECTION,sectionTangent,sectionFlexibility[i]);
   }
   
-  // Compute the following matricies: G, G2, H, H12, H22, Md, Kg
-  Matrix G(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix G2(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix H(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix H12(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix H22(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix Md(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix Kg(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  // Compute the following matrices: G, G2, H, H12, H22, Md, Kg
+  Matrix G(NDM_NATURAL,NDM_NATURAL);
+  Matrix G2(NDM_NATURAL,NDM_NATURAL);
+  Matrix H(NDM_NATURAL,NDM_NATURAL);
+  Matrix H12(NDM_NATURAL,NDM_NATURAL);
+  Matrix H22(NDM_NATURAL,NDM_NATURAL);
+  Matrix Md(NDM_NATURAL,NDM_NATURAL);
+  Matrix Kg(NDM_NATURAL,NDM_NATURAL);
 	
   G.Zero();
   G2.Zero();
@@ -813,24 +876,24 @@ mixedBeamColumn2d::getInitialStiff(void)
 	
   
   // Compute the inverse of the H matrix
-  invertMatrix(NUM_NATRUAL_DISPLACEMENTS, H, Hinv);
+  invertMatrix(NDM_NATURAL, H, Hinv);
 
   // Compute the GMH matrix ( G + Md - H12 ) and its transpose
   GMH = G + Md - H12;
   //GMH = G; // Omit P-small delta
 	
   // Compute the transposes of the following matricies: G2, GMH
-  Matrix G2T(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  Matrix GMHT(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  for( i = 0; i < NUM_NATRUAL_DISPLACEMENTS; i++ ){
-   	for( j = 0; j < NUM_NATRUAL_DISPLACEMENTS; j++ ){
+  Matrix G2T(NDM_NATURAL,NDM_NATURAL);
+  Matrix GMHT(NDM_NATURAL,NDM_NATURAL);
+  for( i = 0; i < NDM_NATURAL; i++ ){
+   	for( j = 0; j < NDM_NATURAL; j++ ){
     		G2T(i,j) = G2(j,i);
     		GMHT(i,j) = GMH(j,i);
   	}
   }  
   
   // Compute the stiffness matrix without the torsion term
-  Matrix K_temp(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  Matrix K_temp(NDM_NATURAL,NDM_NATURAL);
   K_temp = ( Kg + G2 + G2T - H22 ) + GMHT * Hinv * GMH;
   //K_temp = ( Kg ) + GMHT * Hinv * GMH; // Omit P-small delta
   
@@ -850,7 +913,7 @@ mixedBeamColumn2d::getTangentStiff(void){
 const Vector &
 mixedBeamColumn2d::getResistingForce(void){
   crdTransf->update();  // Will remove once we clean up the corotational 3d transformation -- MHS
-  Vector p0(NUM_NATRUAL_DISPLACEMENTS);
+  Vector p0(NDM_NATURAL);
   p0.Zero();
   return crdTransf->getGlobalResistingForce(internalForceOpenSees, p0);	 
 }
@@ -880,7 +943,7 @@ int mixedBeamColumn2d::update()
   Vector naturalDisp = crdTransf->getBasicTrialDisp();   
   naturalDisp = transformNaturalCoords*naturalDisp; 
     
-  Vector naturalIncrDeltaDisp(NUM_NATRUAL_DISPLACEMENTS);
+  Vector naturalIncrDeltaDisp(NDM_NATURAL);
   naturalIncrDeltaDisp = naturalDisp - lastNaturalDisp;
   lastNaturalDisp = naturalDisp;
   
@@ -891,15 +954,15 @@ int mixedBeamColumn2d::update()
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
   	double temp_x, temp_A, temp_B;
-  	Matrix temp_Md(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix K_temp(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	Matrix temp_Md(NDM_NATURAL,NDM_NATURAL);
+  	Matrix K_temp(NDM_NATURAL,NDM_NATURAL);
 
   	Vector sectionForceShapeFcn[numSections];
-  	Vector sectionDefWithTorsion(NUM_SECTION_DISPLACEMENTS_WITH_TORSION);
-  	Vector sectionForceFibersWithTorsion(NUM_SECTION_DISPLACEMENTS_WITH_TORSION);
+  	Vector sectionDefWithTorsion(NDM_SECTION);
+  	Vector sectionForceFibersWithTorsion(NDM_SECTION);
   	
 	for ( i = 0; i < numSections; i++ )
-		sectionForceShapeFcn[i] = Vector(NUM_SECTION_DISPLACEMENTS);
+		sectionForceShapeFcn[i] = Vector(NDM_SECTION);
 		
   	int algorithmType = NUKALA_LL_ALGORITHM;
 
@@ -907,7 +970,7 @@ int mixedBeamColumn2d::update()
   	if ( initialFlagB == 0 ) {
   		
   		// Compute initial H11, G, Md, H12, matricies and c vector
-  		Vector myZeros(NUM_NATRUAL_DISPLACEMENTS);
+  		Vector myZeros(NDM_NATURAL);
   		myZeros.Zero();
   		
   	  	for ( i = 0; i < numSections; i++ ){
@@ -916,8 +979,8 @@ int mixedBeamColumn2d::update()
   	     	nd1[i] = this->getNd1(i, myZeros, lengthLastStep);
   	     	nd2[i] = this->getNd2(i, 0, lengthLastStep);
 
-  	     	for( j = 0; j < NUM_SECTION_DISPLACEMENTS; j++ ){
-  	        	for( k = 0; k < NUM_NATRUAL_DISPLACEMENTS; k++ ){
+  	     	for( j = 0; j < NDM_SECTION; j++ ){
+  	        	for( k = 0; k < NDM_NATURAL; k++ ){
   	        		nd1T[i](k,j) = nd1[i](j,k);
   	        		nd2T[i](k,j) = nd2[i](j,k);
   	        		nldhatT[i](k,j) = nldhat[i](j,k);
@@ -925,11 +988,14 @@ int mixedBeamColumn2d::update()
   	     	}
   	  	}  	
   	  	
-     	// Set inital and commited section flexibility
+     	// Set initial and committed section flexibility
   	  	for ( i = 0; i < numSections; i++ ){
-   	  		Matrix sectionTangent = sections[i]->getInitialTangent();
-  	  		invertMatrix(NUM_SECTION_DISPLACEMENTS,sectionTangent,sectionFlexibility[i]);
-     		
+  	  		Matrix ks(NDM_SECTION,NDM_SECTION);
+  	  	  	getSectionTangent(i,2,ks);
+  	  	  	invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+
+  	  		//Matrix sectionTangent = sections[i]->getInitialTangent();
+  	  		//invertMatrix(NDM_SECTION,sectionTangent,sectionFlexibility[i]);
 
   	  		commitedSectionFlexibility[i] = sectionFlexibility[i];
   	  	}
@@ -942,29 +1008,29 @@ int mixedBeamColumn2d::update()
   	  	}
   	  	
   	  	// Compute the H matrix and its inverse
-  	  	Matrix H(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	  	Matrix H(NDM_NATURAL,NDM_NATURAL);
   	  	H.Zero();
   	  	for( i = 0; i < numSections; i++ ){
   	     	H = H + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd1[i];
   	  	}
-  	  	invertMatrix(NUM_NATRUAL_DISPLACEMENTS, H, Hinv);
+  	  	invertMatrix(NDM_NATURAL, H, Hinv);
   	  	commitedHinv = Hinv;
   	  	
   	  	// Compute the H12 matrix
-  	  	Matrix H12(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	  	Matrix H12(NDM_NATURAL,NDM_NATURAL);
   	  	H12.Zero();
   	  	for( i = 0; i < numSections; i++ ){
   	     	H12 = H12 + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd2[i];
   	  	}
 
   	  	// Compute the G matrix and its transpose
-  	  	Matrix G(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	  	Matrix G(NDM_NATURAL,NDM_NATURAL);
   	  	G.Zero();
   	  	for( i = 0; i < numSections; i++ ){
        		G = G + initialLength * wt[i] * nd1T[i] * nldhat[i];
   	  	}
   	  	
-  	  	Matrix Md(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	  	Matrix Md(NDM_NATURAL,NDM_NATURAL);
   	  	Md.Zero();	// should be zero at converged state
   	  	
   	  	GMH = G + Md - H12;
@@ -987,8 +1053,8 @@ int mixedBeamColumn2d::update()
      	nd1[i] = this->getNd1(i, naturalDisp, currentLength);
      	nd2[i] = this->getNd2(i, internalForceOpenSees(0), currentLength);
 
-     	for( j = 0; j < NUM_SECTION_DISPLACEMENTS; j++ ){
-        	for( k = 0; k < NUM_NATRUAL_DISPLACEMENTS; k++ ){
+     	for( j = 0; j < NDM_SECTION; j++ ){
+        	for( k = 0; k < NDM_NATURAL; k++ ){
         		nd1T[i](k,j) = nd1[i](j,k);
         		nd2T[i](k,j) = nd2[i](j,k);
         		nldhatT[i](k,j) = nldhat[i](j,k);
@@ -1004,33 +1070,47 @@ int mixedBeamColumn2d::update()
   	  	//naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Omit P-small delta
   		
   		for ( i = 0; i < numSections; i++){
-  			
+  			// Compute section deformations
   			sectionForceShapeFcn[i] = nd1[i] * naturalForce;
   			sectionDefFibers[i] = sectionDefFibers[i] + sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
   			
-  			// sectionDeformations is the total strain which is sent to the section
-  			int res = sections[i]->setTrialSectionDeformation(sectionDefFibers[i]);
+  			// Send section deformation to section object
+  			setSectionDeformation(i,sectionDefFibers[i]);
+
+  			// Get section force vector
+  			getSectionStress(i,sectionForceFibers[i]);
   			
-  			// sectionForceFibersWithTorsion is the total stress
-  			sectionForceFibersWithTorsion = sections[i]->getStressResultant();
+  			// Get section tangent matrix
+  			Matrix ks(NDM_SECTION,NDM_SECTION);
+  			getSectionTangent(i,1,ks);
   			
-  			// Get section tangent and flexibility matricies with the GJ term (size = NUM_SECTION_DISPLACEMENTS_WITH_TORSION)
-  			ksa[i] = sections[i]->getSectionTangent();
-  			invertMatrix(NUM_SECTION_DISPLACEMENTS_WITH_TORSION,ksa[i],fsa[i]);
+  			// Compute section flexibility matrix
+  			invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
   			
-  			// fs and ks are the section tangent and flexibility matricies without the GJ term (size = NUM_SECTION_DISPLACEMENTS)
-  			for( j = 0; j < NUM_SECTION_DISPLACEMENTS; j++ )
-  				for( k = 0; k< NUM_SECTION_DISPLACEMENTS; k++ )
-  					sectionFlexibility[i](j,k) = fsa[i](j,k);
   			
-  			for( m = 0; m < NUM_SECTION_DISPLACEMENTS; m++ )
-  				sectionForceFibers[i](m) = sectionForceFibersWithTorsion(m);
+//  			// sectionDeformations is the total strain which is sent to the section
+//  			int res = sections[i]->setTrialSectionDeformation(sectionDefFibers[i]);
+//
+//  			// sectionForceFibersWithTorsion is the total stress
+//  			sectionForceFibersWithTorsion = sections[i]->getStressResultant();
+//
+//  			// Get section tangent and flexibility matricies with the GJ term (size = NDM_SECTION)
+//  			ksa[i] = sections[i]->getSectionTangent();
+//  			invertMatrix(NDM_SECTION,ksa[i],fsa[i]);
+//
+//  			// fs and ks are the section tangent and flexibility matricies without the GJ term (size = NDM_SECTION)
+//  			for( j = 0; j < NDM_SECTION; j++ )
+//  				for( k = 0; k< NDM_SECTION; k++ )
+//  					sectionFlexibility[i](j,k) = fsa[i](j,k);
+//
+//  			for( m = 0; m < NDM_SECTION; m++ )
+//  				sectionForceFibers[i](m) = sectionForceFibersWithTorsion(m);
   			
   		}
   		
   	} else if ( algorithmType == NUKALA_NN_ALGORITHM ) {
   		
-  		Vector sectionForceResidual(NUM_SECTION_DISPLACEMENTS_WITH_TORSION);
+  		Vector sectionForceResidual(NDM_SECTION);
   		int iSectionIter, iElementIter;
   		int maxSectionIter = 10;
   		int maxElementIter = 10;
@@ -1059,23 +1139,36 @@ int mixedBeamColumn2d::update()
   					sectionDefFibers[i] = sectionDefFibers[i] +  sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
   		
   					// send to section
-  					for( m = 0; m < NUM_SECTION_DISPLACEMENTS; m++ )
-  						sectionDefWithTorsion(m) = sectionDefFibers[i](m);
-  					sectionDefWithTorsion(3) = 0.0; // set torsional strain to zero
-	     					
-  					int res = sections[i]->setTrialSectionDeformation(sectionDefWithTorsion);
-  					
-  					sectionForceFibersWithTorsion = sections[i]->getStressResultant();
-  					for( m = 0; m < NUM_SECTION_DISPLACEMENTS; m++ )
-  						sectionForceFibers[i](m) = sectionForceFibersWithTorsion(m);
-  					
-  					ksa[i] = sections[i]->getSectionTangent();
+  		  			setSectionDeformation(i,sectionDefFibers[i]);
 
-  					invertMatrix(NUM_SECTION_DISPLACEMENTS_WITH_TORSION,ksa[i],fsa[i]);
-  					// fs and ks are the section tangent and flexibility matricies without the GJ term (size = NUM_SECTION_DISPLACEMENTS)
-  					for( j = 0; j < NUM_SECTION_DISPLACEMENTS; j++ )
-  						for( k = 0; k< NUM_SECTION_DISPLACEMENTS; k++ )
-  							sectionFlexibility[i](j,k) = fsa[i](j,k);
+  		  			// Get section force vector
+  					getSectionStress(i,sectionForceFibers[i]);
+  					
+  					// Get section tangent matrix
+  					Matrix ks(NDM_SECTION,NDM_SECTION);
+  					getSectionTangent(i,1,ks);
+
+  					// Compute section flexibility matrix
+  					invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+  					
+//  					// send to section
+//  					for( m = 0; m < NDM_SECTION; m++ )
+//  						sectionDefWithTorsion(m) = sectionDefFibers[i](m);
+//  					sectionDefWithTorsion(3) = 0.0; // set torsional strain to zero
+//
+//  					int res = sections[i]->setTrialSectionDeformation(sectionDefWithTorsion);
+//
+//  					sectionForceFibersWithTorsion = sections[i]->getStressResultant();
+//  					for( m = 0; m < NDM_SECTION; m++ )
+//  						sectionForceFibers[i](m) = sectionForceFibersWithTorsion(m);
+//
+//  					ksa[i] = sections[i]->getSectionTangent();
+//
+//  					invertMatrix(NDM_SECTION,ksa[i],fsa[i]);
+//  					// fs and ks are the section tangent and flexibility matricies without the GJ term (size = NDM_SECTION)
+//  					for( j = 0; j < NDM_SECTION; j++ )
+//  						for( k = 0; k< NDM_SECTION; k++ )
+//  							sectionFlexibility[i](j,k) = fsa[i](j,k);
 
   					// check if sectionForceShapeFcn ~ sectionForceFibers, break if so
   					sectionForceResidual = sectionForceShapeFcn[i] - sectionForceFibers[i];
@@ -1098,11 +1191,11 @@ int mixedBeamColumn2d::update()
   	  			break;
   	  		
   			// compute H
-  	  		Matrix H(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+  	  		Matrix H(NDM_NATURAL,NDM_NATURAL);
   			H.Zero();
   			for( i = 0; i < numSections; i++ )
   				H   = H   + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd1[i];
-  			invertMatrix(NUM_NATRUAL_DISPLACEMENTS, H, Hinv);
+  			invertMatrix(NDM_NATURAL, H, Hinv);
   			
   			// compute new naturalForce
   			naturalForce = naturalForce + Hinv * V;
@@ -1113,14 +1206,14 @@ int mixedBeamColumn2d::update()
 
   	  	
   	// Compute the following matricies: G, G2, V, c, V2, H, H12, H22, Md, Kg
-  	Matrix G(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix G2(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix H(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix H12(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix H22(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix Md(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix Kg(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Vector V2(NUM_NATRUAL_DISPLACEMENTS);
+  	Matrix G(NDM_NATURAL,NDM_NATURAL);
+  	Matrix G2(NDM_NATURAL,NDM_NATURAL);
+  	Matrix H(NDM_NATURAL,NDM_NATURAL);
+  	Matrix H12(NDM_NATURAL,NDM_NATURAL);
+  	Matrix H22(NDM_NATURAL,NDM_NATURAL);
+  	Matrix Md(NDM_NATURAL,NDM_NATURAL);
+  	Matrix Kg(NDM_NATURAL,NDM_NATURAL);
+  	Vector V2(NDM_NATURAL);
   	
   	G.Zero();
   	G2.Zero();
@@ -1154,18 +1247,18 @@ int mixedBeamColumn2d::update()
   	}
   	
  	// Compute the inverse of the H matrix
-  	invertMatrix(NUM_NATRUAL_DISPLACEMENTS, H, Hinv);
+  	invertMatrix(NDM_NATURAL, H, Hinv);
 
   	// Compute the GMH matrix ( G + Md - H12 ) and its transpose
   	GMH = G + Md - H12;
   	//GMH = G; // Omit P-small delta
   	
   	// Compute the transposes of the following matricies: G, G2, GMH
-  	Matrix GT(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix G2T(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	Matrix GMHT(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
-  	for( i = 0; i < NUM_NATRUAL_DISPLACEMENTS; i++ ){
-     	for( j = 0; j < NUM_NATRUAL_DISPLACEMENTS; j++ ){
+  	Matrix GT(NDM_NATURAL,NDM_NATURAL);
+  	Matrix G2T(NDM_NATURAL,NDM_NATURAL);
+  	Matrix GMHT(NDM_NATURAL,NDM_NATURAL);
+  	for( i = 0; i < NDM_NATURAL; i++ ){
+     	for( j = 0; j < NDM_NATURAL; j++ ){
        		GT(i,j) = G(j,i);
       		G2T(i,j) = G2(j,i);
       		GMHT(i,j) = GMH(j,i);
@@ -1174,7 +1267,7 @@ int mixedBeamColumn2d::update()
   	
  	
   	// Define the internal force
-  	Vector internalForce(NUM_NATRUAL_DISPLACEMENTS);
+  	Vector internalForce(NDM_NATURAL);
   	internalForce.Zero();
   	if ( algorithmType == NUKALA_LL_ALGORITHM ) {
   		
@@ -1190,7 +1283,7 @@ int mixedBeamColumn2d::update()
   	}
     
     // Compute internal force for OpenSees ( i.e., add torsion and rearrange )
-    for( i = 0; i < NUM_NATRUAL_DISPLACEMENTS; i++ )
+    for( i = 0; i < NDM_NATURAL; i++ )
     	internalForceOpenSees(i) = internalForce(i);
     	
     internalForceOpenSees = transformNaturalCoordsT*internalForceOpenSees;
@@ -1201,8 +1294,8 @@ int mixedBeamColumn2d::update()
     
     // Add in the torsional stiffness term
     kv.Zero();
-    for( i = 0; i < NUM_NATRUAL_DISPLACEMENTS; i++ )
-    	for( j = 0; j< NUM_NATRUAL_DISPLACEMENTS; j++ )
+    for( i = 0; i < NDM_NATURAL; i++ )
+    	for( j = 0; j< NDM_NATURAL; j++ )
     		kv(i,j) = K_temp(i,j);
     
   	return 0;
@@ -1227,47 +1320,53 @@ mixedBeamColumn2d::getResistingForceIncInertia()
   // Compute the current resisting force
   theVector = this->getResistingForce();
 
+  // Add the inertial forces
   if (rho != 0.0) {
-    const Vector &accel1 = theNodes[0]->getTrialAccel();
-    const Vector &accel2 = theNodes[1]->getTrialAccel();
+	const Vector &accel1 = theNodes[0]->getTrialAccel();
+	const Vector &accel2 = theNodes[1]->getTrialAccel();
 
-    double L = crdTransf->getInitialLength();
-    double m = 0.5*rho*L;
+	double L = crdTransf->getInitialLength();
+	double m = 0.5*rho*L;
 
-    theVector(0) += m*accel1(0);
-    theVector(1) += m*accel1(1);
-    theVector(3) += m*accel2(0);
-    theVector(4) += m*accel2(1);
+	theVector(0) += m*accel1(0);
+	theVector(1) += m*accel1(1);
+	theVector(2) += m*accel1(2);
+	theVector(6) += m*accel2(0);
+	theVector(7) += m*accel2(1);
+	theVector(8) += m*accel2(2);
+  }
 
-    // add the damping forces if rayleigh damping
-    if (alphaM != 0.0 || betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0)
-	theVector += this->getRayleighDampingForces();
-
-  } else {
-	  
-    // add the damping forces if rayleigh damping
-    if (betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0)
+  // Add the damping forces
+  if ( doRayleigh == 1 && (alphaM != 0.0 || betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0) ) {
 	theVector += this->getRayleighDampingForces();
   }
 
-  return theVector;    
+  return theVector;
 }
 
 
 void
 mixedBeamColumn2d::Print(OPS_Stream &s, int flag)
 {
-   if (flag == 1)
-   {
+   if (flag == 1) {
       s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn2d ";
       s << "\tConnected Nodes: " << connectedExternalNodes ;
       s << "\tNumber of Sections: " << numSections;
       s << "\tMass density: " << rho;
       for (int i = 0; i < numSections; i++)
          s << "\nSection "<<i<<" :" << *sections[i];
-    }
-   else
-   {
+
+   } else if (flag == 33) {
+     s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn3d ";
+     double xi[maxNumSections]; // location of sections or gauss points or integration points
+     beamIntegr->getSectionLocations(numSections, initialLength, xi);
+     double wt[maxNumSections]; // weights of sections or gauss points of integration points
+     beamIntegr->getSectionWeights(numSections, initialLength, wt);
+     s << "\n section xi wt";
+     for (int i = 0; i < numSections; i++)
+       s << "\n"<<i<<" "<<xi[i]<<" "<<wt[i];
+
+   } else {
       s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn2d ";
       s << "\tConnected Nodes: " << connectedExternalNodes ;
       s << "\tNumber of Sections: " << numSections;
@@ -1387,7 +1486,7 @@ mixedBeamColumn2d::getd_hat(int sec, const Vector &v, double L){
 
    double temp_x, temp_A, temp_B, temp_C, temp_D, temp_E, temp_F;
 
-   Vector D_hat(NUM_SECTION_DISPLACEMENTS);
+   Vector D_hat(NDM_SECTION);
    D_hat.Zero();
 
    temp_x = L * xi[sec];
@@ -1415,7 +1514,7 @@ mixedBeamColumn2d::getKg(int sec, double P, double L){
 
    temp_x = L * xi[sec];
 
-   Matrix kg(NUM_NATRUAL_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+   Matrix kg(NDM_NATURAL,NDM_NATURAL);
    kg.Zero();
 
    temp_A = 1 - 4 * temp_x / L + 3 * ( temp_x * temp_x ) / ( L * L );
@@ -1447,7 +1546,7 @@ mixedBeamColumn2d::getNld_hat(int sec, const Vector &v, double L){
    temp_E = - 4 / L + 6 * temp_x / ( L * L );
    temp_F =  - 2 / L + 6 * temp_x / ( L * L );
  
-   Matrix Nld_hat(NUM_SECTION_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+   Matrix Nld_hat(NDM_SECTION,NDM_NATURAL);
    Nld_hat.Zero();
 
    Nld_hat(0,0) = temp_C + temp_C * temp_C * v(0);
@@ -1468,7 +1567,7 @@ mixedBeamColumn2d::getNd2(int sec, double P, double L){
 
    temp_x = L * xi[sec];
 
-   Matrix Nd2(NUM_SECTION_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+   Matrix Nd2(NDM_SECTION,NDM_NATURAL);
    Nd2.Zero();
 
    temp_A = L * ( temp_x / L - 2 * pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) );
@@ -1493,7 +1592,7 @@ mixedBeamColumn2d::getNd1(int sec, const Vector &v, double L){
    temp_A = L * ( temp_x / L - 2 * pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[1]
            + L * ( - pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[2];
 
-   Matrix Nd1(NUM_SECTION_DISPLACEMENTS,NUM_NATRUAL_DISPLACEMENTS);
+   Matrix Nd1(NDM_SECTION,NDM_NATURAL);
    Nd1.Zero();
 
    Nd1(0,0)   = 1.0;
@@ -1504,6 +1603,117 @@ mixedBeamColumn2d::getNd1(int sec, const Vector &v, double L){
    return Nd1;
 }
 	
+
+void
+mixedBeamColumn2d::getSectionTangent(int sec,int type,Matrix &kSection) {
+    int order = sections[sec]->getOrder();
+    const ID &code = sections[sec]->getType();
+
+    // Initialize formulation friendly variables
+    kSection.Zero();
+
+    // Get the stress resultant from section
+    Matrix sectionTangent(order,order);
+    if ( type == 1 ) {
+      sectionTangent = sections[sec]->getSectionTangent();
+    } else if ( type == 2 ) {
+      sectionTangent = sections[sec]->getInitialTangent();
+    } else {
+      sectionTangent.Zero();
+    }
+
+    // Set Components of Section Tangent
+    int i,j;
+    for (i = 0; i < order; i++) {
+		for (j = 0; j < order; j++) {
+		  switch(code(i)) {
+		  case SECTION_RESPONSE_P:
+			  switch(code(j)) {
+			  case SECTION_RESPONSE_P:
+				kSection(0,0) = sectionTangent(i,j);
+				break;
+			  case SECTION_RESPONSE_MZ:
+				kSection(0,1) = sectionTangent(i,j);
+				break;
+			  default:
+				break;
+			  }
+			  break;
+		  case SECTION_RESPONSE_MZ:
+			  switch(code(j)) {
+			  case SECTION_RESPONSE_P:
+				kSection(1,0) = sectionTangent(i,j);
+				break;
+			  case SECTION_RESPONSE_MZ:
+				kSection(1,1) = sectionTangent(i,j);
+				break;
+			  default:
+				break;
+			  }
+			  break;
+		  default:
+			  break;
+		  }
+		}
+    }
+}
+
+void
+mixedBeamColumn2d::getSectionStress(int sec,Vector &fSection) {
+    int order = sections[sec]->getOrder();
+    const ID &code = sections[sec]->getType();
+
+    // Get the stress resultant from section
+    Vector stressResultant = sections[sec]->getStressResultant();
+
+    // Initialize formulation friendly variables
+    fSection.Zero();
+
+    // Set Components of Section Stress Resultant
+    int j;
+    for (j = 0; j < order; j++) {
+      switch(code(j)) {
+      case SECTION_RESPONSE_P:
+    	fSection(0) = stressResultant(j);
+        break;
+      case SECTION_RESPONSE_MZ:
+    	fSection(1) = stressResultant(j);
+        break;
+      default:
+        break;
+      }
+    }
+}
+
+void
+mixedBeamColumn2d::setSectionDeformation(int sec,Vector &defSection) {
+    int order = sections[sec]->getOrder();
+    const ID &code = sections[sec]->getType();
+
+    // Initialize Section Deformation Vector
+    Vector sectionDeformation(order);
+    sectionDeformation.Zero();
+
+    // Set Components of Section Deformations
+    int j;
+    for (j = 0; j < order; j++) {
+      switch(code(j)) {
+      case SECTION_RESPONSE_P:
+    	sectionDeformation(j) = defSection(0);
+        break;
+      case SECTION_RESPONSE_MZ:
+    	sectionDeformation(j) = defSection(1);
+        break;
+      default:
+        break;
+      }
+    }
+
+    // Set the section deformations
+    int res = sections[sec]->setTrialSectionDeformation(sectionDeformation);
+}
+
+
 int
 mixedBeamColumn2d::sendSelf(int commitTag, Channel &theChannel){  
   // @todo write mixedBeamColumn2d::sendSelf

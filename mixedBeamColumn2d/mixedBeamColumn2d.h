@@ -36,9 +36,8 @@
 #include <Matrix.h>
 #include <Vector.h>
 
-//#include <BeamIntegration.h>
-//#include <SectionForceDeformation.h>
-#include <FiberSectionGJ.h> // @todo Make the element work for e 
+#include <BeamIntegration.h>
+#include <SectionForceDeformation.h>
 #include <CrdTransf.h>
 
 class Node;
@@ -54,8 +53,8 @@ class mixedBeamColumn2d : public Element
   public:
 	  // constructors 
     mixedBeamColumn2d (int tag, int nodeI, int nodeJ,
-		    int numSections, FiberSectionGJ *sectionPtrs[], BeamIntegration &bi,
-		    CrdTransf &coordTransf, double massDensPerUnitLength);
+		    int numSections, SectionForceDeformation *sectionPtrs[], BeamIntegration &bi,
+		    CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh, bool geomLinear);
     mixedBeamColumn2d ();
 
     // destructor
@@ -91,6 +90,8 @@ class mixedBeamColumn2d : public Element
     Response* setResponse(const char **argv, int argc, OPS_Stream &output);
     int getResponse(int responseID, Information &eleInfo);    
     
+    const char *getClassType(void) const {return "mixedBeamColumn2d";};
+
   protected:
   
   private:
@@ -101,14 +102,21 @@ class mixedBeamColumn2d : public Element
 	Matrix getNd2(int sec, double P, double L);
 	Matrix getKg(int sec, double P, double L);  
 	  
+    // Private Functions - Interaction With The Sections
+    void getSectionTangent(int sec,int type,Matrix &kSection);
+    void getSectionStress(int sec,Vector &fSection);
+    void setSectionDeformation(int sec,Vector &defSection);
+
     // private attributes - a copy for each object of the class
 	ID connectedExternalNodes; // tags of the end nodes
     Node *theNodes[2];   // pointers to the nodes
 	BeamIntegration *beamIntegr;
     int numSections;
-    FiberSectionGJ **sections;          // array of pointers to sections
+    SectionForceDeformation **sections;          // array of pointers to sections
     CrdTransf *crdTransf;        // pointer to coordinate tranformation object
 
+    int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
+    bool geomLinear;						// flag for whether or not the interation geometric nonlinearity is active
     double rho;                    // mass density per unit length
     double deflength;
     double lengthLastIteration;		// the deformed length of the element in the last iteration
@@ -157,10 +165,6 @@ class mixedBeamColumn2d : public Element
     
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
-    static Matrix *ks;                    // array of section stiffness matrices
-    static Matrix *fs;
-    static Matrix *ksa;
-    static Matrix *fsa;
     static Matrix *nldhat;
     static Matrix *nldhatT;
     static Matrix *nd1; 

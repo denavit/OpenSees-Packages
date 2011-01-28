@@ -51,6 +51,7 @@
 #include <RadauBeamIntegration.h>
 #include <NewtonCotesBeamIntegration.h>
 #include <TrapezoidalBeamIntegration.h>
+#include <RegularizedHingeIntegration.h>
 
 // Constants that define the dimensionality
 #define  NDM   3                       // dimension of the problem (3d)
@@ -109,7 +110,7 @@ localInit()
 //   $iNode, $jNode         end nodes
 //   $numIntgrPts           number of integration points along the element length
 //   $secTag                identifier for previously-defined section object
-//   $transfTags            identifier for previously-defined coordinate-transformation (CrdTransf) object
+//   $transfTag             identifier for previously-defined coordinate-transformation (CrdTransf) object
 //
 // Optional Input:
 //   -mass $massDens
@@ -120,6 +121,8 @@ localInit()
 //       $rFlag             optional, default = 1
 //                              rFlag = 0 no rayleigh damping
 //                              rFlag = 1 include rayleigh damping (default)
+//   -geomLinear            perform analysis without internal geometric nonlinearity
+//
 //
 // References:
 //   1. Bulent N. Alemdar and Donald W. White, "Displacement, Flexibility, and Mixed Beam-Column Finite
@@ -199,6 +202,7 @@ OPS_mixedBeamColumn3d()
   // Set Default Values for Optional Input
   int doRayleigh = 1;
   double massDens = 0.0;
+  bool geomLinear = false;
   BeamIntegration *beamIntegr = 0;
   
   // Loop through remaining arguments to get optional input
@@ -232,6 +236,17 @@ OPS_mixedBeamColumn3d()
 		    beamIntegr = new NewtonCotesBeamIntegration();
 		  } else if (strcmp(sData2,"Trapezoidal") == 0) {
 		    beamIntegr = new TrapezoidalBeamIntegration();
+		  } else if (strcmp(sData2,"RegularizedLobatto") == 0 || strcmp(sData2,"RegLobatto") == 0) {
+			numData = 4;
+			if (OPS_GetDoubleInput(&numData, dData) != 0) {
+			  opserr << "WARNING invalid input, want: -integration RegularizedLobatto $lpI $lpJ $zetaI $zetaJ \n";
+			  return 0;
+			}
+			BeamIntegration *otherBeamInt = 0;
+			otherBeamInt = new LobattoBeamIntegration();
+			beamIntegr = new RegularizedHingeIntegration(*otherBeamInt, dData[0], dData[1], dData[2], dData[3]);
+		    if (otherBeamInt != 0)
+		      delete otherBeamInt;
 		  } else {
 			opserr << "WARNING invalid integration type, element: " << eleTag;
 			return 0;
@@ -243,6 +258,9 @@ OPS_mixedBeamColumn3d()
 	        opserr << "WARNING: Invalid doRayleigh in element mixedBeamColumn3d " << eleTag;
 	        return 0;
 	      }
+
+	  } else if ( strcmp(sData,"-geomLinear") == 0 ) {
+		  geomLinear = true;
 
 	  } else {
 		  opserr << "WARNING unknown option " << sData << "\n";
@@ -256,7 +274,7 @@ OPS_mixedBeamColumn3d()
 
 
   // now create the element and add it to the Domain
-  Element *theElement = new mixedBeamColumn3d(eleTag, nodeI, nodeJ, numIntgrPts, sections, *beamIntegr, *theTransf, massDens, doRayleigh);
+  Element *theElement = new mixedBeamColumn3d(eleTag, nodeI, nodeJ, numIntgrPts, sections, *beamIntegr, *theTransf, massDens, doRayleigh, geomLinear);
   
   if (theElement == 0) {
     opserr << "WARNING ran out of memory creating element with tag " << eleTag << endln;
@@ -271,9 +289,9 @@ OPS_mixedBeamColumn3d()
 // and the node ID's of it's nodal end points.
 // allocates the necessary space needed by each object
 mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec, SectionForceDeformation **sec,
-				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength, int damp):
+				      BeamIntegration &bi, CrdTransf &coordTransf, double massDensPerUnitLength, int damp, bool geomLin):
   Element(tag,ELE_TAG_mixedBeamColumn3d), 
-  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(damp),
+  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(damp), geomLinear(geomLin),
   rho(massDensPerUnitLength), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
   initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
   V(NDM_NATURAL), committedV(NDM_NATURAL),
@@ -440,7 +458,7 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
 
 mixedBeamColumn3d::mixedBeamColumn3d():
   Element(0,ELE_TAG_mixedBeamColumn3d), 
-  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(0),
+  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(0), geomLinear(false),
   rho(0.0), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
   initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
   V(NDM_NATURAL), committedV(NDM_NATURAL),
@@ -1324,17 +1342,25 @@ mixedBeamColumn3d::getResistingForceIncInertia()
 void
 mixedBeamColumn3d::Print(OPS_Stream &s, int flag)
 {
-   if (flag == 1)
-   {
+   if (flag == 1) {
       s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn3d ";
       s << "\tConnected Nodes: " << connectedExternalNodes ;
       s << "\tNumber of Sections: " << numSections;
       s << "\tMass density: " << rho;
       for (int i = 0; i < numSections; i++)
          s << "\nSection "<<i<<" :" << *sections[i];
-    }
-   else
-   {
+
+    } else if (flag == 33) {
+      s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn3d ";
+      double xi[maxNumSections]; // location of sections or gauss points or integration points
+      beamIntegr->getSectionLocations(numSections, initialLength, xi);
+      double wt[maxNumSections]; // weights of sections or gauss points of integration points
+      beamIntegr->getSectionWeights(numSections, initialLength, wt);
+      s << "\n section xi wt";
+      for (int i = 0; i < numSections; i++)
+        s << "\n"<<i<<" "<<xi[i]<<" "<<wt[i];
+
+    } else {
       s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn3d ";
       s << "\tConnected Nodes: " << connectedExternalNodes ;
       s << "\tNumber of Sections: " << numSections;

@@ -55,7 +55,7 @@ class mixedBeamColumn3d : public Element
     // constructors
     mixedBeamColumn3d (int tag, int nodeI, int nodeJ,
             int numSections, SectionForceDeformation **sectionPtrs, BeamIntegration &bi,
-            CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh);
+            CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh, bool geomLinear);
     mixedBeamColumn3d ();
 
     // destructor
@@ -91,6 +91,8 @@ class mixedBeamColumn3d : public Element
     Response* setResponse(const char **argv, int argc, OPS_Stream &output);
     int getResponse(int responseID, Information &eleInfo);    
     
+    const char *getClassType(void) const {return "mixedBeamColumn3d";};
+
   protected:
   
   private:
@@ -115,6 +117,7 @@ class mixedBeamColumn3d : public Element
     CrdTransf *crdTransf;                   // pointer to coordinate transformation object
 
     int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
+    bool geomLinear;						// flag for whether or not the interation geometric nonlinearity is active
     double rho;                             // mass density per unit length
     double deflength;                       //
     double lengthLastIteration;             // the deformed length of the element in the last iteration
