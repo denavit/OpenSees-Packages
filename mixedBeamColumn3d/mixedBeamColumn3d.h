@@ -17,7 +17,7 @@
 **   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
 **                                                                    **
 ** ****************************************************************** */
-                                                                        
+
 // $Revision: 1.1 $
 // $Date: 2010-05-04 17:14:46 $
 // $Source: /scratch/slocal/chroot/cvsroot/openseescomp/CompositePackages/mixedBeamColumn3d/mixedBeamColumn3d.h,v $
@@ -25,10 +25,10 @@
 #ifndef mixedBeamColumn3d_h
 #define mixedBeamColumn3d_h
 
-// Written: Mark D. Denavit, University of Illinois at Urbana-Champaign 
+// Written: Mark D. Denavit, University of Illinois at Urbana-Champaign
 //
 // Description: This file contains the interface for the mixedBeamColumn3d class.
-// It defines the class interface and the class attributes. 
+// It defines the class interface and the class attributes.
 //
 // What: "@(#) mixedBeamColumn3d.h, revA"
 
@@ -68,33 +68,33 @@ class mixedBeamColumn3d : public Element
     int getNumDOF(void);
     void setDomain(Domain *theDomain);
 
-    // public methods to set the state of the element    
+    // public methods to set the state of the element
     int commitState(void);
     int revertToLastCommit(void);
     int revertToStart(void);
     int update(void);
 
-    // public methods to obtain stiffness, mass, damping and residual information    
+    // public methods to obtain stiffness, mass, damping and residual information
     const Matrix &getTangentStiff(void);
     const Matrix &getInitialStiff(void);
     const Matrix &getMass(void);
 
     const Vector &getResistingForce(void);
     const Vector &getResistingForceIncInertia(void);
-    
-    // public methods for output    
+
+    // public methods for output
     int sendSelf(int cTag, Channel &theChannel);
     int recvSelf(int cTag, Channel &theChannel, FEM_ObjectBroker &theBroker);
     void Print(OPS_Stream &s, int flag = 0);
     friend OPS_Stream &operator<<(OPS_Stream &s, mixedBeamColumn3d &E);
-    
+
     Response* setResponse(const char **argv, int argc, OPS_Stream &output);
-    int getResponse(int responseID, Information &eleInfo);    
-    
+    int getResponse(int responseID, Information &eleInfo);
+
     const char *getClassType(void) const {return "mixedBeamColumn3d";};
 
   protected:
-  
+
   private:
     // Private Functions - Shape Functions
     Matrix getNld_hat(int sec, const Vector &v, double L);
@@ -117,7 +117,7 @@ class mixedBeamColumn3d : public Element
     CrdTransf *crdTransf;                   // pointer to coordinate transformation object
 
     int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
-    bool geomLinear;						// flag for whether or not the interation geometric nonlinearity is active
+    bool geomLinear;						            // flag for whether or not the internal geometric nonlinearity is active
     double rho;                             // mass density per unit length
     double deflength;                       //
     double lengthLastIteration;             // the deformed length of the element in the last iteration
@@ -128,7 +128,7 @@ class mixedBeamColumn3d : public Element
     int initialFlagB;                       // indicates if the initial local matrices need to be computed
     int itr;
     int cnvg;
-        
+
     Vector V;
     Vector committedV;
     Vector internalForceOpenSees;
@@ -143,11 +143,11 @@ class mixedBeamColumn3d : public Element
     Matrix commitedHinv;
     Matrix GMH;
     Matrix commitedGMH;
-    Matrix kv;                     			// stiffness matrix in the basic system
-	Matrix kvcommit;               			// Committed stiffness matrix in the basic system
-    
+    Matrix kv;                     // stiffness matrix in the basic system
+    Matrix kvcommit;               // Committed stiffness matrix in the basic system
+
     Matrix *Ki;
-    
+
     Vector *sectionForceFibers;
     Vector *commitedSectionForceFibers;
     Vector *sectionDefFibers;
@@ -160,18 +160,18 @@ class mixedBeamColumn3d : public Element
     static Matrix theMatrix;
     static Vector theVector;
     static double workArea[];
-    static Matrix transformNaturalCoords; 
+    static Matrix transformNaturalCoords;
     static Matrix transformNaturalCoordsT;
         // matrix to transform the natural coordinates from what the coordinate transformation uses and what the element uses
-    
+
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
     static Matrix *nldhat;
     static Matrix *nldhatT;
-    static Matrix *nd1; 
+    static Matrix *nd1;
     static Matrix *nd2;
     static Matrix *nd1T;
-    static Matrix *nd2T; 
+    static Matrix *nd2T;
 };
 
 #endif
