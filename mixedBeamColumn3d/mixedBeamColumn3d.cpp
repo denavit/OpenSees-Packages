@@ -61,10 +61,6 @@
 #define  NDM_NATURAL  5                // number of element dof's in the basic system without torsion
 #define  NDM_NATURAL_WITH_TORSION  6   // number of element dof's in the basic system with torsion
 
-#define  NUKALA_NN_ALGORITHM 1  // code for Nukala's NN algorithm
-#define  NUKALA_LL_ALGORITHM 2  // code for Nukala's LL algorithm
-
-
 using namespace std;
 
 
@@ -749,10 +745,6 @@ mixedBeamColumn3d::commitState()
 
 int mixedBeamColumn3d::revertToLastCommit()
 {
-	//ofstream nnOutput;
-	//nnOutput.open("nnOutput.dat",ios::app);
-	//nnOutput<<"\nrevertToLastCommit()\n";
-	
    int err;
    int i = 0;
 
@@ -992,9 +984,6 @@ int mixedBeamColumn3d::update()
 	for ( i = 0; i < numSections; i++ )
 		sectionForceShapeFcn[i] = Vector(NDM_SECTION);
 		
-  	int algorithmType = NUKALA_LL_ALGORITHM;
-
-
   	if ( initialFlagB == 0 ) {
   		
   		// Compute initial H11, G, Md, H12, matrices and c vector
@@ -1087,113 +1076,31 @@ int mixedBeamColumn3d::update()
   	}  	
 
   	
-  	if ( algorithmType == NUKALA_LL_ALGORITHM ) {
+	//naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Alemdar's Scheme
+	naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + V ); // Nukala's Scheme
+	//naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Omit P-small delta
 
-  	  	//naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Alemdar's Scheme
-  	 	naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + V ); // Nukala's Scheme
-  	  	//naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Omit P-small delta
-  		
-  		for ( i = 0; i < numSections; i++){
-  			// Compute section deformations
-  			sectionForceShapeFcn[i] = nd1[i] * naturalForce;
-  			sectionDefFibers[i] = sectionDefFibers[i] + sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
-  			
-  			// Send section deformation to section object
-  			double twist = 0.0; // set torsional strain to zero
-  			setSectionDeformation(i,sectionDefFibers[i],twist);
+	for ( i = 0; i < numSections; i++){
+		// Compute section deformations
+		sectionForceShapeFcn[i] = nd1[i] * naturalForce;
+		sectionDefFibers[i] = sectionDefFibers[i] + sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
 
-  			// Get section force vector
-  			double torsionalForce;
-  			getSectionStress(i,sectionForceFibers[i],torsionalForce);
-  			
-  			// Get section tangent matrix
-  			Matrix ks(NDM_SECTION,NDM_SECTION);
-  			getSectionTangent(i,1,ks,GJ);
-  			
-  			// Compute section flexibility matrix
-  			invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
-  		}
-  		
-  	} else if ( algorithmType == NUKALA_NN_ALGORITHM ) {
-  		
-  		Vector sectionForceResidual(NDM_SECTION);
-  		int iSectionIter, iElementIter;
-  		int maxSectionIter = 10;
-  		int maxElementIter = 10;
-  		double tolSectionForce = 0.001;
-  		double tolV = 0.001;
-  		
-  		// compute V
-  		V.Zero();
-  		for( i = 0; i < numSections; i++ )
-  			V   = V   + initialLength * wt[i] * nd1T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i] - sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] ) );
-  			
-  		naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Alemdar's Scheme
-  		
-  		// begin loop for element convergence
-  		for ( iElementIter = 0; iElementIter < maxElementIter; iElementIter++ ) {
-  		
-  			// loop over integration points
-  			for ( i = 0; i < numSections; i++ ) {
-  				
-  				sectionForceShapeFcn[i] = nd1[i] * naturalForce;
-  			
-  				// begin loop for section convergence
-  				for ( iSectionIter = 0; iSectionIter < maxSectionIter; iSectionIter++ ) {
-  					
-  					// compute new sectionDefFibers
-  					sectionDefFibers[i] = sectionDefFibers[i] +  sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
-  		
-  					// send to section
-  		  			double twist = 0.0; // set torsional strain to zero
-  		  			setSectionDeformation(i,sectionDefFibers[i],twist);
+		// Send section deformation to section object
+		double twist = 0.0; // set torsional strain to zero
+		setSectionDeformation(i,sectionDefFibers[i],twist);
 
-  		  			// Get section force vector
-  					double torsionalForce;
-  					getSectionStress(i,sectionForceFibers[i],torsionalForce);
-  					
-  					// Get section tangent matrix
-  					Matrix ks(NDM_SECTION,NDM_SECTION);
-  					getSectionTangent(i,1,ks,GJ);
+		// Get section force vector
+		double torsionalForce;
+		getSectionStress(i,sectionForceFibers[i],torsionalForce);
 
-  					// Compute section flexibility matrix
-  					invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+		// Get section tangent matrix
+		Matrix ks(NDM_SECTION,NDM_SECTION);
+		getSectionTangent(i,1,ks,GJ);
 
-  					// check if sectionForceShapeFcn ~ sectionForceFibers, break if so
-  					sectionForceResidual = sectionForceShapeFcn[i] - sectionForceFibers[i];
-  					
-  					if ( sectionForceResidual.Norm() <= tolSectionForce ) 
-  						break;  					
-  					
-  				}// end loop for section convergence
-  			
-  			} // end loop over integration points
-  		
-  			// compute V
-  	  		V.Zero();
-  	  		for( i = 0; i < numSections; i++ )
-  	  			V   = V   + initialLength * wt[i] * nd1T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i] );
-  	  			//V   = V   + initialLength * wt[i] * nd1T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i] - sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] ) );
-  			
-  	  		// check if V ~ 0, break if so
-  	  		if ( V.Norm() <= tolV ) 
-  	  			break;
-  	  		
-  			// compute H
-  	  		Matrix H(NDM_NATURAL,NDM_NATURAL);
-  			H.Zero();
-  			for( i = 0; i < numSections; i++ )
-  				H   = H   + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd1[i];
-  			invertMatrix(NDM_NATURAL, H, Hinv);
-  			
-  			// compute new naturalForce
-  			naturalForce = naturalForce + Hinv * V;
-  			
-  		}// end loop for element convergence
-  		
-  	}
+		// Compute section flexibility matrix
+		invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+	}
 
-  	  	
   	// Compute the following matrices: G, G2, V, c, V2, H, H12, H22, Md, Kg
   	Matrix G(NDM_NATURAL,NDM_NATURAL);
   	Matrix G2(NDM_NATURAL,NDM_NATURAL);
@@ -1260,19 +1167,13 @@ int mixedBeamColumn3d::update()
   	// Define the internal force
   	Vector internalForce(NDM_NATURAL);
   	internalForce.Zero();
-  	if ( algorithmType == NUKALA_LL_ALGORITHM ) {
   		
-  		// Compute new internal force
-  		//internalForce = GT * naturalForce + V2 + GMHT * Hinv * c; // Alemdar's Scheme
-  		internalForce = GT * naturalForce + V2 + GMHT * Hinv * V; // Nukala's Scheme
-  		//internalForce = GT * naturalForce + GMHT * Hinv * c; // Omit P-small delta
-  	
-  	} else if ( algorithmType == NUKALA_NN_ALGORITHM ) {
-  	
-  		internalForce = GT * naturalForce + V2 + GMHT * Hinv * V;
-  		
-  	}
-    
+	// Compute new internal force
+	//internalForce = GT * naturalForce + V2 + GMHT * Hinv * c; // Alemdar's Scheme
+	internalForce = GT * naturalForce + V2 + GMHT * Hinv * V; // Nukala's Scheme
+	//internalForce = GT * naturalForce + GMHT * Hinv * c; // Omit P-small delta
+
+
     // Compute internal force for OpenSees ( i.e., add torsion and rearrange )
     for( i = 0; i < NDM_NATURAL; i++ )
     	internalForceOpenSees(i) = internalForce(i);
