@@ -78,6 +78,10 @@ class mixedBeamColumn3d : public Element
     const Matrix &getTangentStiff(void);
     const Matrix &getInitialStiff(void);
     const Matrix &getMass(void);
+    const Matrix &getDamp(void);
+
+    void zeroLoad(void);
+    int addLoad(ElementalLoad *theLoad, double loadFactor);
 
     const Vector &getResistingForce(void);
     const Vector &getResistingForceIncInertia(void);
@@ -97,11 +101,12 @@ class mixedBeamColumn3d : public Element
 
   private:
     // Private Functions - Shape Functions
-    Matrix getNld_hat(int sec, const Vector &v, double L);
-    Vector getd_hat(int sec, const Vector &v, double L);
-    Matrix getNd1(int sec, const Vector &v, double L);
+    Matrix getNld_hat(int sec, const Vector &v, double L, bool geomLinear);
+    Vector getd_hat(int sec, const Vector &v, double L, bool geomLinear);
+    Matrix getNd1(int sec, const Vector &v, double L, bool geomLinear);
     Matrix getNd2(int sec, double P, double L);
     Matrix getKg(int sec, double P, double L);
+    Matrix getMd(int sec, Vector dShapeFcn, Vector dFibers, double L);
 
     // Private Functions - Interaction With The Sections
     void getSectionTangent(int sec,int type,Matrix &kSection,double &GJ);
@@ -119,40 +124,40 @@ class mixedBeamColumn3d : public Element
     int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
     bool geomLinear;						            // flag for whether or not the internal geometric nonlinearity is active
     double rho;                             // mass density per unit length
-    double deflength;                       //
-    double lengthLastIteration;             // the deformed length of the element in the last iteration
-    double lengthLastStep;                  // the deformed length of the element at the end of the last step
-    double initialLength;                   //
 
-    int initialFlag;                        // indicates if the element has been initialized
-    int initialFlagB;                       // indicates if the initial local matrices need to be computed
-    int itr;
-    int cnvg;
+    int itr;  // Counts the number of iterations
+    int initialFlag;
 
-    Vector V;
-    Vector committedV;
-    Vector internalForceOpenSees;
-    Vector committedInternalForceOpenSees;
-    Vector naturalForce;
-    Vector commitedNaturalForce;
-    Vector lastNaturalDisp;
-    Vector commitedLastNaturalDisp;
-    Vector c;
-    Vector commitedC;
-    Matrix Hinv;
-    Matrix commitedHinv;
-    Matrix GMH;
-    Matrix commitedGMH;
-    Matrix kv;                     // stiffness matrix in the basic system
-    Matrix kvcommit;               // Committed stiffness matrix in the basic system
-
+    // Attributes that do NOT change during the analysis
+    double initialLength;
     Matrix *Ki;
 
+    // Element Load Variables
+    Matrix *sp;
+    double p0[5]; // Reactions in the basic system due to element loads
+
+    // Attributes that change during the analysis
+    Vector V;
+    Vector internalForceOpenSees;
+    Vector naturalForce;
+    Vector lastNaturalDisp;
+    Matrix Hinv;
+    Matrix GMH;
+    Matrix kv;                     // stiffness matrix in the basic system
     Vector *sectionForceFibers;
-    Vector *commitedSectionForceFibers;
     Vector *sectionDefFibers;
-    Vector *commitedSectionDefFibers;
     Matrix *sectionFlexibility;
+
+    // Committed versions
+    Vector committedV;
+    Vector committedInternalForceOpenSees;
+    Vector commitedNaturalForce;
+    Vector commitedLastNaturalDisp;
+    Matrix commitedHinv;
+    Matrix commitedGMH;
+    Matrix kvcommit;
+    Vector *commitedSectionForceFibers;
+    Vector *commitedSectionDefFibers;
     Matrix *commitedSectionFlexibility;
 
     // static data - single copy for all objects of the class
@@ -167,7 +172,6 @@ class mixedBeamColumn3d : public Element
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
     static Matrix *nldhat;
-    static Matrix *nldhatT;
     static Matrix *nd1;
     static Matrix *nd2;
     static Matrix *nd1T;

@@ -17,18 +17,18 @@
 **   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
 **                                                                    **
 ** ****************************************************************** */
-                                                                        
+
 // $Revision: 1.1 $
 // $Date: 2010-05-04 17:14:45 $
 // $Source: /scratch/slocal/chroot/cvsroot/openseescomp/CompositePackages/mixedBeamColumn2d/mixedBeamColumn2d.h,v $
-                                                                        
+
 #ifndef mixedBeamColumn2d_h
 #define mixedBeamColumn2d_h
 
-// Written: Mark D. Denavit, University of Illinois at Urbana-Champaign 
+// Written: Mark D. Denavit, University of Illinois at Urbana-Champaign
 //
 // Description: This file contains the interface for the mixedBeamColumn2d class.
-// It defines the class interface and the class attributes. 
+// It defines the class interface and the class attributes.
 //
 // What: "@(#) mixedBeamColumn2d.h, revA"
 
@@ -51,10 +51,10 @@ class SectionForceDeformation;
 class mixedBeamColumn2d : public Element
 {
   public:
-	  // constructors 
+    // constructors
     mixedBeamColumn2d (int tag, int nodeI, int nodeJ,
-		    int numSections, SectionForceDeformation *sectionPtrs[], BeamIntegration &bi,
-		    CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh, bool geomLinear);
+        int numSections, SectionForceDeformation *sectionPtrs[], BeamIntegration &bi,
+        CrdTransf &coordTransf, double massDensPerUnitLength, int doRayleigh, bool geomLinear);
     mixedBeamColumn2d ();
 
     // destructor
@@ -67,50 +67,55 @@ class mixedBeamColumn2d : public Element
     int getNumDOF(void);
     void setDomain(Domain *theDomain);
 
-    // public methods to set the state of the element    
+    // public methods to set the state of the element
     int commitState(void);
     int revertToLastCommit(void);
     int revertToStart(void);
     int update(void);
 
-    // public methods to obtain stiffness, mass, damping and residual information    
+    // public methods to obtain stiffness, mass, damping and residual information
     const Matrix &getTangentStiff(void);
     const Matrix &getInitialStiff(void);
     const Matrix &getMass(void);
+    const Matrix &getDamp(void);
+
+    void zeroLoad(void);
+    int addLoad(ElementalLoad *theLoad, double loadFactor);
 
     const Vector &getResistingForce(void);
     const Vector &getResistingForceIncInertia(void);
-    
-    // public methods for output    
+
+    // public methods for output
     int sendSelf(int cTag, Channel &theChannel);
     int recvSelf(int cTag, Channel &theChannel, FEM_ObjectBroker &theBroker);
     void Print(OPS_Stream &s, int flag = 0);
     friend OPS_Stream &operator<<(OPS_Stream &s, mixedBeamColumn2d &E);
-    
+
     Response* setResponse(const char **argv, int argc, OPS_Stream &output);
-    int getResponse(int responseID, Information &eleInfo);    
-    
+    int getResponse(int responseID, Information &eleInfo);
+
     const char *getClassType(void) const {return "mixedBeamColumn2d";};
 
   protected:
-  
+
   private:
-	// private member functions - only available to objects of the class
-	Matrix getNld_hat(int sec, const Vector &v, double L);
-	Vector getd_hat(int sec, const Vector &v, double L);
-	Matrix getNd1(int sec, const Vector &v, double L);
-	Matrix getNd2(int sec, double P, double L);
-	Matrix getKg(int sec, double P, double L);  
-	  
+    // private member functions - only available to objects of the class
+    Matrix getNld_hat(int sec, const Vector &v, double L, bool geomLinear);
+    Vector getd_hat(int sec, const Vector &v, double L, bool geomLinear);
+    Matrix getNd1(int sec, const Vector &v, double L, bool geomLinear);
+    Matrix getNd2(int sec, double P, double L);
+    Matrix getKg(int sec, double P, double L);
+    Matrix getMd(int sec, Vector dShapeFcn, Vector dFibers, double L);
+
     // Private Functions - Interaction With The Sections
     void getSectionTangent(int sec,int type,Matrix &kSection);
     void getSectionStress(int sec,Vector &fSection);
     void setSectionDeformation(int sec,Vector &defSection);
 
     // private attributes - a copy for each object of the class
-	ID connectedExternalNodes; // tags of the end nodes
+    ID connectedExternalNodes; // tags of the end nodes
     Node *theNodes[2];   // pointers to the nodes
-	BeamIntegration *beamIntegr;
+    BeamIntegration *beamIntegr;
     int numSections;
     SectionForceDeformation **sections;          // array of pointers to sections
     CrdTransf *crdTransf;        // pointer to coordinate tranformation object
@@ -118,40 +123,40 @@ class mixedBeamColumn2d : public Element
     int doRayleigh;                         // flag for whether or not rayleigh damping is active for this element
     bool geomLinear;						// flag for whether or not the interation geometric nonlinearity is active
     double rho;                    // mass density per unit length
-    double deflength;
-    double lengthLastIteration;		// the deformed length of the element in the last iteration
-    double lengthLastStep;		  	// the deformed length of the element at the end of the last step
-    double initialLength;
 
-    int initialFlag;            // indicates if the element has been initialized
-    int initialFlagB;  // indicates if the inital local matricies need to be computed
     int itr;
-    int cnvg;
-        
-    Vector V;
-    Vector committedV;
-    Vector internalForceOpenSees;
-    Vector committedInternalForceOpenSees;
-    Vector naturalForce;
-    Vector commitedNaturalForce;
-    Vector lastNaturalDisp;
-    Vector commitedLastNaturalDisp;
-    Vector c;
-    Vector commitedC;
-    Matrix Hinv;
-    Matrix commitedHinv;
-    Matrix GMH;
-    Matrix commitedGMH;
-    Matrix kv;                     // stiffness matrix in the basic system
-    Matrix kvcommit;               // commited stiffness matrix in the basic system
-    
+    int initialFlag;            // indicates if the element has been initialized
+
+    double initialLength;
     Matrix *Ki;
-    
+
+    // Element Load Variables
+    Matrix *sp;
+    double p0[3]; // Reactions in the basic system due to element loads
+
+
+    // Attributes that change during the analysis
+    Vector V;
+    Vector internalForce;
+    Vector naturalForce;
+    Vector lastNaturalDisp;
+    Matrix Hinv;
+    Matrix GMH;
+    Matrix kv;                     // stiffness matrix in the basic system
     Vector *sectionForceFibers;
-    Vector *commitedSectionForceFibers;
     Vector *sectionDefFibers;
-    Vector *commitedSectionDefFibers;
     Matrix *sectionFlexibility;
+
+    // Committed versions
+    Vector committedV;
+    Vector commitedInternalForce;
+    Vector commitedNaturalForce;
+    Vector commitedLastNaturalDisp;
+    Matrix commitedHinv;
+    Matrix commitedGMH;
+    Matrix kvcommit;               // Committed stiffness matrix in the basic system
+    Vector *commitedSectionForceFibers;
+    Vector *commitedSectionDefFibers;
     Matrix *commitedSectionFlexibility;
 
     // static data - single copy for all objects of the class
@@ -159,18 +164,14 @@ class mixedBeamColumn2d : public Element
     static Matrix theMatrix;
     static Vector theVector;
     static double workArea[];
-    static Matrix transformNaturalCoords; 
-    static Matrix transformNaturalCoordsT;
-    	// matrix to transform the natural coordinates from what the coordinate transformation uses and what the element uses 	
-    
+
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
     static Matrix *nldhat;
-    static Matrix *nldhatT;
-    static Matrix *nd1; 
+    static Matrix *nd1;
     static Matrix *nd2;
     static Matrix *nd1T;
-    static Matrix *nd2T; 
+    static Matrix *nd2T;
 };
 
 #endif

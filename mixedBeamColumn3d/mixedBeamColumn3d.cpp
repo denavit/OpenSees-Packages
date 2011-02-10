@@ -73,7 +73,6 @@ int mixedBeamColumn3d::maxNumSections = 10;
 
 Vector *mixedBeamColumn3d::sectionDefShapeFcn = 0;
 Matrix *mixedBeamColumn3d::nldhat = 0;
-Matrix *mixedBeamColumn3d::nldhatT = 0;
 Matrix *mixedBeamColumn3d::nd1 = 0;
 Matrix *mixedBeamColumn3d::nd2 = 0;
 Matrix *mixedBeamColumn3d::nd1T = 0;
@@ -91,15 +90,13 @@ Matrix *mixedBeamColumn3d::nd2T = 0;
 #endif
 
 
-OPS_Export void
-localInit()
-{
+OPS_Export void localInit() {
   OPS_Error("mixedBeamColumn3d element \nWritten by Mark D. Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
 }
 
 // Documentation: Three Dimensional Mixed Beam Column Element
 // element mixedBeamColumn3d $tag $iNode $jNode $numIntgrPts $secTag $transfTag <-mass $massDens>
-//   <-integration $intType> <-doRayleigh $rFlag>
+//   <-integration $intType> <-doRayleigh $rFlag> <-geomLinear>
 //
 // Required Input Parameters:
 //   $tag                   integer tag identifying the element
@@ -133,9 +130,7 @@ localInit()
 //      Urbana-Champaign, Urbana, Illinois, March.
 //
 
-OPS_Export void *
-OPS_mixedBeamColumn3d()
-{
+OPS_Export void * OPS_mixedBeamColumn3d() {
   // Variables to retrieve input
   int iData[10];
   double dData[10];
@@ -291,20 +286,23 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
                                       double massDensPerUnitLength,
                                       int damp, bool geomLin):
   Element(tag,ELE_TAG_mixedBeamColumn3d),
-  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(damp), geomLinear(geomLin),
-  rho(massDensPerUnitLength), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
-  initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
+  connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0),
+  crdTransf(0), doRayleigh(damp), geomLinear(geomLin),
+  rho(massDensPerUnitLength), initialLength(0.0),
+  itr(0), initialFlag(0),
   V(NDM_NATURAL), committedV(NDM_NATURAL),
-  internalForceOpenSees(NDM_NATURAL_WITH_TORSION), committedInternalForceOpenSees(NDM_NATURAL_WITH_TORSION),
+  internalForceOpenSees(NDM_NATURAL_WITH_TORSION),
+  committedInternalForceOpenSees(NDM_NATURAL_WITH_TORSION),
   naturalForce(NDM_NATURAL), commitedNaturalForce(NDM_NATURAL),
   lastNaturalDisp(NDM_NATURAL), commitedLastNaturalDisp(NDM_NATURAL),
-  c(NDM_NATURAL), commitedC(NDM_NATURAL),
+  sp(0),
   Hinv(NDM_NATURAL,NDM_NATURAL), commitedHinv(NDM_NATURAL,NDM_NATURAL),
   GMH(NDM_NATURAL,NDM_NATURAL), commitedGMH(NDM_NATURAL,NDM_NATURAL),
   kv(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION),
   kvcommit(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION),
   Ki(0),
-  sectionForceFibers(0), commitedSectionForceFibers(0), sectionDefFibers(0), commitedSectionDefFibers(0),
+  sectionForceFibers(0), commitedSectionForceFibers(0),
+  sectionDefFibers(0), commitedSectionDefFibers(0),
   sectionFlexibility(0), commitedSectionFlexibility(0)
 {
   theNodes[0] = 0;
@@ -356,7 +354,13 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
     }
   }
 
-  // Mark's Variables
+  p0[0] = 0.0;
+  p0[1] = 0.0;
+  p0[2] = 0.0;
+  p0[3] = 0.0;
+  p0[4] = 0.0;
+
+  // Element vectors and matrices
   sectionForceFibers = new Vector [numSections];
   commitedSectionForceFibers = new Vector [numSections];
   sectionDefFibers = new Vector [numSections];
@@ -365,40 +369,34 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
   commitedSectionFlexibility = new Matrix [numSections];
 
   for (int i = 0; i < numSections; i++){
-    // Mark's Variables
     sectionForceFibers[i] = Vector(NDM_SECTION);
-    commitedSectionForceFibers[i] = Vector(NDM_SECTION);
-    sectionDefFibers[i] = Vector(NDM_SECTION);
-    commitedSectionDefFibers[i] = Vector(NDM_SECTION);
-    sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
-    commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
-  }
-
-  for(int i = 0; i < numSec; i++){
-    // Mark's Variables
-    sectionDefFibers[i].Zero();
-    commitedSectionDefFibers[i].Zero();
     sectionForceFibers[i].Zero();
+    commitedSectionForceFibers[i] = Vector(NDM_SECTION);
     commitedSectionForceFibers[i].Zero();
+    sectionDefFibers[i] = Vector(NDM_SECTION);
+    sectionDefFibers[i].Zero();
+    commitedSectionDefFibers[i] = Vector(NDM_SECTION);
+    commitedSectionDefFibers[i].Zero();
+    sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
     sectionFlexibility[i].Zero();
+    commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
     commitedSectionFlexibility[i].Zero();
   }
 
   V.Zero();
-  committedV.Zero();
   internalForceOpenSees.Zero();
-  committedInternalForceOpenSees.Zero();
   naturalForce.Zero();
-  commitedNaturalForce.Zero();
   lastNaturalDisp.Zero();
-  commitedLastNaturalDisp.Zero();
-  c.Zero();
-  commitedC.Zero();
   Hinv.Zero();
-  commitedHinv.Zero();
   GMH.Zero();
-  commitedGMH.Zero();
   kv.Zero();
+
+  committedV.Zero();
+  committedInternalForceOpenSees.Zero();
+  commitedNaturalForce.Zero();
+  commitedLastNaturalDisp.Zero();
+  commitedHinv.Zero();
+  commitedGMH.Zero();
   kvcommit.Zero();
 
   if ( transformNaturalCoords(1,1) != 1 ) {
@@ -427,8 +425,6 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
     sectionDefShapeFcn  = new Vector [maxNumSections];
   if (nldhat == 0)
     nldhat  = new Matrix [maxNumSections];
-  if (nldhatT == 0)
-    nldhatT  = new Matrix [maxNumSections];
   if (nd1 == 0)
     nd1  = new Matrix [maxNumSections];
   if (nd2 == 0)
@@ -437,17 +433,17 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
     nd1T  = new Matrix [maxNumSections];
   if (nd2T == 0)
     nd2T  = new Matrix [maxNumSections];
-  if (!sectionDefShapeFcn || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
+  if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
     opserr << "mixedBeamColumn3d::mixedBeamColumn3d() -- failed to allocate static section arrays";
     exit(-1);
   }
 
   int i;
   for ( i=0; i<maxNumSections; i++ ){
-    nldhatT[i] = Matrix(NDM_NATURAL,NDM_SECTION);
     nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
     nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
   }
+
 }
 
 // constructor:
@@ -456,13 +452,13 @@ mixedBeamColumn3d::mixedBeamColumn3d (int tag, int nodeI, int nodeJ, int numSec,
 mixedBeamColumn3d::mixedBeamColumn3d():
   Element(0,ELE_TAG_mixedBeamColumn3d),
   connectedExternalNodes(2), beamIntegr(0), numSections(0), sections(0), crdTransf(0), doRayleigh(0), geomLinear(false),
-  rho(0.0), deflength(0.0), lengthLastIteration(0.0), lengthLastStep(0.0), initialLength(0.0),
-  initialFlag(0), initialFlagB(0), itr(0), cnvg(0),
+  rho(0.0), initialLength(0.0),
+  itr(0), initialFlag(0),
   V(NDM_NATURAL), committedV(NDM_NATURAL),
   internalForceOpenSees(NDM_NATURAL_WITH_TORSION), committedInternalForceOpenSees(NDM_NATURAL_WITH_TORSION),
   naturalForce(NDM_NATURAL), commitedNaturalForce(NDM_NATURAL),
   lastNaturalDisp(NDM_NATURAL), commitedLastNaturalDisp(NDM_NATURAL),
-  c(NDM_NATURAL), commitedC(NDM_NATURAL),
+  sp(0),
   Hinv(NDM_NATURAL,NDM_NATURAL), commitedHinv(NDM_NATURAL,NDM_NATURAL),
   GMH(NDM_NATURAL,NDM_NATURAL), commitedGMH(NDM_NATURAL,NDM_NATURAL),
   kv(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION), kvcommit(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION),
@@ -473,6 +469,13 @@ mixedBeamColumn3d::mixedBeamColumn3d():
   theNodes[0] = 0;
   theNodes[1] = 0;
 
+  p0[0] = 0.0;
+  p0[1] = 0.0;
+  p0[2] = 0.0;
+  p0[3] = 0.0;
+  p0[4] = 0.0;
+
+  // Element vectors and matrices
   sectionForceFibers = new Vector [numSections];
   commitedSectionForceFibers = new Vector [numSections];
   sectionDefFibers = new Vector [numSections];
@@ -480,41 +483,37 @@ mixedBeamColumn3d::mixedBeamColumn3d():
   sectionFlexibility = new Matrix [numSections];
   commitedSectionFlexibility = new Matrix [numSections];
 
-
   for (int i = 0; i < numSections; i++){
     sectionForceFibers[i] = Vector(NDM_SECTION);
-    commitedSectionForceFibers[i] = Vector(NDM_SECTION);
-    sectionDefFibers[i] = Vector(NDM_SECTION);
-    commitedSectionDefFibers[i] = Vector(NDM_SECTION);
-    sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
-    commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
-  }
-
-  for(int i = 0; i < numSections; i++){
-    sectionDefFibers[i].Zero();
-    commitedSectionDefFibers[i].Zero();
     sectionForceFibers[i].Zero();
+    commitedSectionForceFibers[i] = Vector(NDM_SECTION);
     commitedSectionForceFibers[i].Zero();
+    sectionDefFibers[i] = Vector(NDM_SECTION);
+    sectionDefFibers[i].Zero();
+    commitedSectionDefFibers[i] = Vector(NDM_SECTION);
+    commitedSectionDefFibers[i].Zero();
+    sectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
     sectionFlexibility[i].Zero();
+    commitedSectionFlexibility[i] = Matrix(NDM_SECTION,NDM_SECTION);
     commitedSectionFlexibility[i].Zero();
   }
 
   V.Zero();
-  committedV.Zero();
   internalForceOpenSees.Zero();
-  committedInternalForceOpenSees.Zero();
   naturalForce.Zero();
-  commitedNaturalForce.Zero();
   lastNaturalDisp.Zero();
-  commitedLastNaturalDisp.Zero();
-  c.Zero();
-  commitedC.Zero();
   Hinv.Zero();
-  commitedHinv.Zero();
   GMH.Zero();
-  commitedGMH.Zero();
   kv.Zero();
+
+  committedV.Zero();
+  committedInternalForceOpenSees.Zero();
+  commitedNaturalForce.Zero();
+  commitedLastNaturalDisp.Zero();
+  commitedHinv.Zero();
+  commitedGMH.Zero();
   kvcommit.Zero();
+
 
   if ( transformNaturalCoords(1,1) != 1 ) {
     // if transformNaturalCoords hasn't been set yet then set it
@@ -538,8 +537,6 @@ mixedBeamColumn3d::mixedBeamColumn3d():
     sectionDefShapeFcn  = new Vector [maxNumSections];
   if (nldhat == 0)
     nldhat  = new Matrix [maxNumSections];
-  if (nldhatT == 0)
-    nldhatT  = new Matrix [maxNumSections];
   if (nd1 == 0)
     nd1  = new Matrix [maxNumSections];
   if (nd2 == 0)
@@ -548,14 +545,13 @@ mixedBeamColumn3d::mixedBeamColumn3d():
     nd1T  = new Matrix [maxNumSections];
   if (nd2T == 0)
     nd2T  = new Matrix [maxNumSections];
-  if (!sectionDefShapeFcn || !nldhat || !nldhatT || !nd1 || !nd2 || !nd1T || !nd2T ) {
+  if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
     opserr << "mixedBeamColumn3d::mixedBeamColumn3d() -- failed to allocate static section arrays";
     exit(-1);
   }
 
   int i;
   for ( i=0; i<maxNumSections; i++ ){
-    nldhatT[i] = Matrix(NDM_NATURAL,NDM_SECTION);
     nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
     nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
   }
@@ -578,6 +574,9 @@ mixedBeamColumn3d::~mixedBeamColumn3d() {
 
   if (beamIntegr != 0)
     delete beamIntegr;
+
+  if (sp != 0)
+    delete sp;
 
   if (Ki != 0)
     delete Ki;
@@ -665,13 +664,8 @@ void mixedBeamColumn3d::setDomain(Domain *theDomain) {
     exit(0);
   }
 
-  deflength = crdTransf->getInitialLength();
-  initialLength = deflength;
-  lengthLastIteration = deflength;
-  lengthLastStep = deflength;
-
   // Check element length
-  if (deflength == 0.0) {
+  if (crdTransf->getInitialLength() == 0.0) {
     opserr << "mixedBeamColumn3d::setDomain(): Zero element length:" << this->getTag();
     exit(0);
   }
@@ -681,8 +675,6 @@ void mixedBeamColumn3d::setDomain(Domain *theDomain) {
 int mixedBeamColumn3d::commitState() {
   int err = 0; // error flag
   int i = 0; // integer for loops
-
-  cnvg = 0;
 
   // call element commitState to do any base class stuff
   if ((err = this->Element::commitState()) != 0) {
@@ -703,12 +695,10 @@ int mixedBeamColumn3d::commitState() {
     return err;
 
   // commit the element variables state
-  lengthLastStep = deflength;
   committedV = V;
   committedInternalForceOpenSees = internalForceOpenSees;
   commitedNaturalForce = naturalForce;
   commitedLastNaturalDisp = lastNaturalDisp;
-  commitedC = c;
   commitedHinv = Hinv;
   commitedGMH = GMH;
   kvcommit = kv;
@@ -729,13 +719,10 @@ int mixedBeamColumn3d::revertToLastCommit() {
   int err;
   int i = 0;
 
-  cnvg = 1;
-
   do {
     err = sections[i]->revertToLastCommit();
     i++;
   } while (err == 0 && i < numSections);
-
 
   if (err)
     return err;
@@ -749,7 +736,6 @@ int mixedBeamColumn3d::revertToLastCommit() {
   internalForceOpenSees = committedInternalForceOpenSees;
   naturalForce = commitedNaturalForce;
   lastNaturalDisp = commitedLastNaturalDisp;
-  c = commitedC;
   Hinv = commitedHinv;
   GMH = commitedGMH;
   kv   = kvcommit;
@@ -768,10 +754,11 @@ int mixedBeamColumn3d::revertToLastCommit() {
 
 int mixedBeamColumn3d::revertToStart()
 {
-  // revert the sections state to start
   int err;
-  int i = 0;
+  int i,j,k; // for loops
+  i = 0;
 
+  // revert the sections state to start
   do {
      err = sections[i++]->revertToStart();
   } while (err == 0 && i < numSections);
@@ -784,25 +771,11 @@ int mixedBeamColumn3d::revertToStart()
     return err;
 
   // revert the element state to start
-  // @todo revertToStart element state
 
+  // Set initial length
+  initialLength = crdTransf->getInitialLength();
 
-
-  // Reset iteration counter
-  itr = 0;
-
-  return err;
-}
-
-const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
-
-  // Check if it has been computed already
-  if (Ki != 0)
-    return *Ki;
-
-  int i,j,k; // for loops
-  double GJ;
-
+  // Get the numerical integration weights
   double wt[maxNumSections]; // weights of sections or gauss points of integration points
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
@@ -812,8 +785,8 @@ const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
 
   // Set initial shape functions
   for ( i = 0; i < numSections; i++ ){
-    nldhat[i] = this->getNld_hat(i, myZeros, initialLength);
-    nd1[i] = this->getNd1(i, myZeros, initialLength);
+    nldhat[i] = this->getNld_hat(i, myZeros, initialLength, geomLinear);
+    nd1[i] = this->getNd1(i, myZeros, initialLength, geomLinear);
     nd2[i] = this->getNd2(i, 0, initialLength);
 
     for( j = 0; j < NDM_SECTION; j++ ){
@@ -824,11 +797,21 @@ const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
     }
   }
 
-  // Set initial and section flexibility and GJ
+  // Set initial and committed section flexibility and GJ
+  Matrix ks(NDM_SECTION,NDM_SECTION);
+  double GJ;
   for ( i = 0; i < numSections; i++ ){
-    Matrix ks(NDM_SECTION,NDM_SECTION);
     getSectionTangent(i,2,ks,GJ);
     invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
+    commitedSectionFlexibility[i] = sectionFlexibility[i];
+  }
+
+  // Set initial and committed section forces and deformations
+  for ( i = 0; i < numSections; i++ ){
+    sectionForceFibers[i].Zero();
+    commitedSectionForceFibers[i].Zero();
+    sectionDefFibers[i].Zero();
+    commitedSectionDefFibers[i].Zero();
   }
 
   // Compute the following matrices: G, G2, H, H12, H22, Md, Kg
@@ -859,10 +842,12 @@ const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
 
   // Compute the inverse of the H matrix
   invertMatrix(NDM_NATURAL, H, Hinv);
+  commitedHinv = Hinv;
 
   // Compute the GMH matrix ( G + Md - H12 ) and its transpose
   GMH = G + Md - H12;
   //GMH = G; // Omit P-small delta
+  commitedGMH = GMH;
 
   // Compute the transposes of the following matrices: G2, GMH
   Matrix G2T(NDM_NATURAL,NDM_NATURAL);
@@ -880,23 +865,55 @@ const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
   //K_temp_noT = ( Kg ) + GMHT * Hinv * GMH; // Omit P-small delta
 
   // Add in the torsional stiffness term
-  Matrix K_temp_withT(NDM_NATURAL_WITH_TORSION,NDM_NATURAL_WITH_TORSION);
-  K_temp_withT.Zero();
+  kv.Zero();
   for( i = 0; i < NDM_NATURAL; i++ ) {
     for( j = 0; j < NDM_NATURAL; j++ ) {
-      K_temp_withT(i,j) = K_temp_noT(i,j);
+      kv(i,j) = K_temp_noT(i,j);
     }
   }
 
-  K_temp_withT(5,5) =  GJ/initialLength; // Torsional Stiffness GJ/L
+  kv(5,5) =  GJ/initialLength; // Torsional Stiffness GJ/L
+  kvcommit = kv;
 
-  Ki = new Matrix(crdTransf->getInitialGlobalStiffMatrix(K_temp_withT));
+  Matrix kvOpenSees = transformNaturalCoordsT*kv*transformNaturalCoords;
+  Ki = new Matrix(crdTransf->getInitialGlobalStiffMatrix(kvOpenSees));
 
+  // Vector V is zero at initial state
+  V.Zero();
+  committedV.Zero();
+
+  // Internal force is zero at initial state
+  internalForceOpenSees.Zero();
+  committedInternalForceOpenSees.Zero();
+  naturalForce.Zero();
+  commitedNaturalForce.Zero();
+
+  // Last natural displacement is zero at initial state
+  lastNaturalDisp.Zero();
+  commitedLastNaturalDisp.Zero();
+
+  // Reset iteration counter
+  itr = 0;
+
+  // Set initialFlag to 1 so update doesn't call again
+  initialFlag = 1;
+
+  return err;
+}
+
+const Matrix & mixedBeamColumn3d::getInitialStiff(void) {
+  // If things haven't be initialized, then do so
+  if (initialFlag == 0) {
+    this->revertToStart();
+  }
   return *Ki;
-
 }
 
 const Matrix & mixedBeamColumn3d::getTangentStiff(void) {
+  // If things haven't be initialized, then do so
+  if (initialFlag == 0) {
+    this->revertToStart();
+  }
   crdTransf->update();  // Will remove once we clean up the corotational 3d transformation -- MHS
   Matrix ktOpenSees = transformNaturalCoordsT*kv*transformNaturalCoords;
   return crdTransf->getGlobalStiffMatrix(ktOpenSees,internalForceOpenSees);
@@ -904,21 +921,33 @@ const Matrix & mixedBeamColumn3d::getTangentStiff(void) {
 
 const Vector & mixedBeamColumn3d::getResistingForce(void) {
   crdTransf->update();  // Will remove once we clean up the corotational 3d transformation -- MHS
-  Vector p0(NDM_NATURAL);
-  p0.Zero();
-  return crdTransf->getGlobalResistingForce(internalForceOpenSees, p0);
+  Vector p0Vec(p0, NDM_NATURAL);
+  return crdTransf->getGlobalResistingForce(internalForceOpenSees, p0Vec);
 }
 
 int mixedBeamColumn3d::update() {
 
+  // If things haven't be initialized, then do so
+  if (initialFlag == 0) {
+    this->revertToStart();
+  }
+
   int i,j,k; // integers for loops
 
-  itr = itr + 1; // says how many times update has been called since the last commit state
+  // Update iteration counter
+  // says how many times update has been called since the last commit state
+  itr++;
 
-  // Current and Initial Length
+  // Update Coordinate Transformation
   crdTransf->update();
-  double currentLength = crdTransf->getDeformedLength();
-  const double initialLength = crdTransf->getInitialLength();
+
+  // Current Length
+  double currentLength;
+  if (geomLinear) {
+    currentLength = initialLength;
+  } else {
+    currentLength = crdTransf->getDeformedLength();
+  }
 
   // Compute the natural displacements
   Vector naturalDispWithTorsion = crdTransf->getBasicTrialDisp();
@@ -935,135 +964,69 @@ int mixedBeamColumn3d::update() {
   naturalIncrDeltaDisp = naturalDisp - lastNaturalDisp;
   lastNaturalDisp = naturalDisp;
 
-  // Get the numerical integration scheme
-  double xi[maxNumSections]; // location of sections or gauss points or integration points
-  beamIntegr->getSectionLocations(numSections, initialLength, xi);
+  // Get the numerical integration weights
   double wt[maxNumSections]; // weights of sections or gauss points of integration points
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
   // Define Variables
-  double temp_x, temp_A, temp_B;
-  Matrix temp_Md(NDM_NATURAL,NDM_NATURAL);
-  Matrix K_temp(NDM_NATURAL,NDM_NATURAL);
   double GJ;
+  double torsionalForce;
   Vector sectionForceShapeFcn[numSections];
   for ( i = 0; i < numSections; i++ ) {
     sectionForceShapeFcn[i] = Vector(NDM_SECTION);
   }
 
-  // If update had never been called before, set variables to initial status
-  // This should be in revertToStart
-  if ( initialFlagB == 0 ) {
-
-      // Compute initial H11, G, Md, H12, matrices and c vector
-      Vector myZeros(NDM_NATURAL);
-      myZeros.Zero();
-
-        for ( i = 0; i < numSections; i++ ){
-           nldhat[i] = this->getNld_hat(i, myZeros, lengthLastStep);
-          sectionDefShapeFcn[i] = this->getd_hat(i, myZeros, lengthLastStep);
-           nd1[i] = this->getNd1(i, myZeros, lengthLastStep);
-           nd2[i] = this->getNd2(i, 0, lengthLastStep);
-
-           for( j = 0; j < NDM_SECTION; j++ ){
-              for( k = 0; k < NDM_NATURAL; k++ ){
-                nd1T[i](k,j) = nd1[i](j,k);
-                nd2T[i](k,j) = nd2[i](j,k);
-                nldhatT[i](k,j) = nldhat[i](j,k);
-              }
-           }
-        }
-
-       // Set initial and committed section flexibility
-        for ( i = 0; i < numSections; i++ ){
-        Matrix ks(NDM_SECTION,NDM_SECTION);
-        getSectionTangent(i,2,ks,GJ);
-        invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
-          commitedSectionFlexibility[i] = sectionFlexibility[i];
-        }
-
-        for ( i = 0; i < numSections; i++ ){
-          sectionForceFibers[i].Zero();
-          commitedSectionForceFibers[i].Zero();
-          sectionDefFibers[i].Zero();
-          commitedSectionDefFibers[i].Zero();
-        }
-
-        // Compute the H matrix and its inverse
-        Matrix H(NDM_NATURAL,NDM_NATURAL);
-        H.Zero();
-        for( i = 0; i < numSections; i++ ){
-           H = H + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd1[i];
-        }
-        invertMatrix(NDM_NATURAL, H, Hinv);
-        commitedHinv = Hinv;
-
-        // Compute the H12 matrix
-        Matrix H12(NDM_NATURAL,NDM_NATURAL);
-        H12.Zero();
-        for( i = 0; i < numSections; i++ ){
-           H12 = H12 + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd2[i];
-        }
-
-        // Compute the G matrix and its transpose
-        Matrix G(NDM_NATURAL,NDM_NATURAL);
-        G.Zero();
-        for( i = 0; i < numSections; i++ ){
-           G = G + initialLength * wt[i] * nd1T[i] * nldhat[i];
-        }
-
-        Matrix Md(NDM_NATURAL,NDM_NATURAL);
-        Md.Zero();	// should be zero at converged state
-
-        GMH = G + Md - H12;
-        //GMH = G; // Omit P-small delta
-
-        commitedGMH = GMH;
-        c.Zero();	// should be zero at initial state
-       commitedC.Zero();
-        naturalForce.Zero();
-        commitedNaturalForce.Zero();
-
-        initialFlagB = 1; // Don't need to come back here again
-   }
-
-
   // Compute shape functions and their transposes
   for ( i = 0; i < numSections; i++ ){
     // Shape Functions
-    nldhat[i] = this->getNld_hat(i, naturalDisp, currentLength);
-    sectionDefShapeFcn[i] = this->getd_hat(i, naturalDisp, currentLength);
-    nd1[i] = this->getNd1(i, naturalDisp, currentLength);
-    nd2[i] = this->getNd2(i, internalForceOpenSees(0), currentLength);
+    nldhat[i] = this->getNld_hat(i, naturalDisp, currentLength, geomLinear);
+    sectionDefShapeFcn[i] = this->getd_hat(i, naturalDisp, currentLength, geomLinear);
+    nd1[i] = this->getNd1(i, naturalDisp, currentLength, geomLinear);
+    if (geomLinear) {
+      nd2[i].Zero();
+    } else {
+      nd2[i] = this->getNd2(i, internalForceOpenSees(0), currentLength);
+    }
 
     // Transpose of shape functions
     for( j = 0; j < NDM_SECTION; j++ ){
       for( k = 0; k < NDM_NATURAL; k++ ){
         nd1T[i](k,j) = nd1[i](j,k);
         nd2T[i](k,j) = nd2[i](j,k);
-        nldhatT[i](k,j) = nldhat[i](j,k);
       }
     }
   }
 
   // Update natural force
-  //naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Alemdar's Scheme
-  naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + V ); // Nukala's Scheme
-  //naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + c ); // Omit P-small delta
+  if (geomLinear) {
+    naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + V );
+  } else {
+    naturalForce = naturalForce + Hinv * ( GMH * naturalIncrDeltaDisp + V );
+  }
+
 
   // Update sections
   for ( i = 0; i < numSections; i++){
     // Compute section deformations
     sectionForceShapeFcn[i] = nd1[i] * naturalForce;
+    if (sp != 0) {
+      const Matrix &s_p = *sp;
+      for ( j = 0; j < NDM_SECTION; j++ ) {
+        sectionForceShapeFcn[i](j) += s_p(j,i);
+      }
+    }
     sectionDefFibers[i] = sectionDefFibers[i] + sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] );
 
     // Send section deformation to section object
-    double twist = 0.0; // set torsional strain to zero
-    setSectionDeformation(i,sectionDefFibers[i],twist);
+    double torsionalStrain = twist/currentLength;
+    setSectionDeformation(i,sectionDefFibers[i],torsionalStrain);
 
     // Get section force vector
-    double torsionalForce;
-    getSectionStress(i,sectionForceFibers[i],torsionalForce);
+    double tempTorsionalForce;
+    getSectionStress(i,sectionForceFibers[i],tempTorsionalForce);
+    if (i == 0) {
+      torsionalForce = tempTorsionalForce;
+    }
 
     // Get section tangent matrix
     Matrix ks(NDM_SECTION,NDM_SECTION);
@@ -1073,7 +1036,7 @@ int mixedBeamColumn3d::update() {
     invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
   }
 
-  // Compute the following matrices: V, c, V2, G, G2, H, H12, H22, Md, Kg
+  // Compute the following matrices: V, V2, G, G2, H, H12, H22, Md, Kg
   Vector V2(NDM_NATURAL);
   Matrix G(NDM_NATURAL,NDM_NATURAL);
   Matrix G2(NDM_NATURAL,NDM_NATURAL);
@@ -1084,7 +1047,6 @@ int mixedBeamColumn3d::update() {
   Matrix Kg(NDM_NATURAL,NDM_NATURAL);
 
   V.Zero();
-  c.Zero();
   V2.Zero();
   G.Zero();
   G2.Zero();
@@ -1096,25 +1058,17 @@ int mixedBeamColumn3d::update() {
 
   for( i = 0; i < numSections; i++ ){
     V   = V   + initialLength * wt[i] * nd1T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i] - sectionFlexibility[i] * ( sectionForceShapeFcn[i] - sectionForceFibers[i] ) );
-    c   = c   + initialLength * wt[i] * nd1T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i]);
     V2  = V2  + initialLength * wt[i] * nd2T[i] * (sectionDefShapeFcn[i] - sectionDefFibers[i]);
     G   = G   + initialLength * wt[i] * nd1T[i] * nldhat[i];
     G2  = G2  + initialLength * wt[i] * nd2T[i] * nldhat[i];
     H   = H   + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd1[i];
     H12 = H12 + initialLength * wt[i] * nd1T[i] * sectionFlexibility[i] * nd2[i];
     H22 = H22 + initialLength * wt[i] * nd2T[i] * sectionFlexibility[i] * nd2[i];
-    Kg  = Kg  + initialLength * wt[i] * this->getKg(i, sectionForceFibers[i](0), currentLength);
-      // sectionForceFibers[i](0) is the axial load, P
-
-      temp_x = currentLength * xi[i];
-      temp_A =  ( temp_x / currentLength - 2 * pow( temp_x / currentLength, 2 ) + pow( temp_x / currentLength, 3 ) ) * currentLength;
-      temp_B =  ( - pow( temp_x / currentLength, 2 ) + pow( temp_x / currentLength, 3 ) ) * currentLength;
-      temp_Md.Zero();
-      temp_Md(0,1) = temp_A * ( sectionDefShapeFcn[i](1) - sectionDefFibers[i](1) );
-      temp_Md(0,2) = temp_A * ( sectionDefShapeFcn[i](2) - sectionDefFibers[i](2) );
-      temp_Md(0,3) = temp_B * ( sectionDefShapeFcn[i](1) - sectionDefFibers[i](1) );
-      temp_Md(0,4) = temp_B * ( sectionDefShapeFcn[i](2) - sectionDefFibers[i](2) );
-    Md  = Md  + initialLength * wt[i] * temp_Md;
+    if (!geomLinear) {
+      Kg = Kg  + initialLength * wt[i] * this->getKg(i, sectionForceFibers[i](0), currentLength);
+        // sectionForceFibers[i](0) is the axial load, P
+      Md = Md  + initialLength * wt[i] * this->getMd(i, sectionDefShapeFcn[i], sectionDefFibers[i], currentLength);
+    }
   }
 
   // Compute the inverse of the H matrix
@@ -1140,21 +1094,26 @@ int mixedBeamColumn3d::update() {
   Vector internalForce(NDM_NATURAL);
   internalForce.Zero();
 
-  //internalForce = GT * naturalForce + V2 + GMHT * Hinv * c; // Alemdar's Scheme
-  internalForce = GT * naturalForce + V2 + GMHT * Hinv * V; // Nukala's Scheme
-  //internalForce = GT * naturalForce + GMHT * Hinv * c; // Omit P-small delta
-
+  if (geomLinear) {
+    internalForce = GT * naturalForce + V2 + GMHT * Hinv * V;
+  } else {
+    internalForce = GT * naturalForce + V2 + GMHT * Hinv * V;
+  }
 
   // Compute internal force for OpenSees ( i.e., add torsion and rearrange )
   for ( i = 0; i < NDM_NATURAL; i++ ) {
     internalForceOpenSees(i) = internalForce(i);
   }
-  internalForceOpenSees(5) = twist*GJ/currentLength; // Add in torsional force
+  internalForceOpenSees(5) = torsionalForce; // Add in torsional force
   internalForceOpenSees = transformNaturalCoordsT*internalForceOpenSees;
 
   // Compute the stiffness matrix without the torsion term
-  K_temp = ( Kg + G2 + G2T - H22 ) + GMHT * Hinv * GMH;
-  //K_temp = ( Kg ) + GMHT * Hinv * GMH; // Omit P-small delta
+  Matrix K_temp(NDM_NATURAL,NDM_NATURAL);
+  if (geomLinear) {
+    K_temp = ( Kg + G2 + G2T - H22 ) + GMHT * Hinv * GMH;
+  } else {
+    K_temp = ( Kg + G2 + G2T - H22 ) + GMHT * Hinv * GMH;
+  }
 
   // Add in the torsional stiffness term
   kv.Zero();
@@ -1180,6 +1139,125 @@ const Matrix & mixedBeamColumn3d::getMass(void) {
   return theMatrix;
 }
 
+const Matrix & mixedBeamColumn3d::getDamp(void) {
+  theMatrix.Zero();
+
+  // Add the damping forces
+  if ( doRayleigh == 1 && (alphaM != 0.0 || betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0) ) {
+    theMatrix = this->Element::getDamp();
+  }
+
+  return theMatrix;
+}
+
+void mixedBeamColumn3d::zeroLoad(void) {
+  if (sp != 0)
+    sp->Zero();
+
+  p0[0] = 0.0;
+  p0[1] = 0.0;
+  p0[2] = 0.0;
+  p0[3] = 0.0;
+  p0[4] = 0.0;
+}
+
+int mixedBeamColumn3d::addLoad(ElementalLoad *theLoad, double loadFactor) {
+
+  int type;
+  const Vector &data = theLoad->getData(type, loadFactor);
+
+  if (sp == 0) {
+    sp = new Matrix(NDM_SECTION,numSections);
+    if (sp == 0) {
+      opserr << "mixedBeamColumn3d::addLoad -- out of memory\n";
+      exit(-1);
+    }
+  }
+
+  double L = crdTransf->getInitialLength();
+
+  double xi[maxNumSections];
+  beamIntegr->getSectionLocations(numSections, L, xi);
+
+  if (type == LOAD_TAG_Beam3dUniformLoad) {
+    double wy = data(0)*loadFactor;  // Transverse
+    double wz = data(1)*loadFactor;  // Transverse
+    double wx = data(2)*loadFactor;  // Axial
+
+    Matrix &s_p = *sp;
+
+    // Accumulate applied section forces due to element loads
+    for (int i = 0; i < numSections; i++) {
+      double x = xi[i]*L;
+      // Axial
+      s_p(0,i) += wx*(L-x);
+      // Moment
+      s_p(1,i) += wy*0.5*x*(x-L);
+      // Moment
+      s_p(2,i) += wz*0.5*x*(L-x);
+    }
+
+    // Accumulate reactions in basic system
+    p0[0] -= wx*L;
+    double V;
+    V = 0.5*wy*L;
+    p0[1] -= V;
+    p0[2] -= V;
+    V = 0.5*wz*L;
+    p0[3] -= V;
+    p0[4] -= V;
+
+
+  } else if (type == LOAD_TAG_Beam3dPointLoad) {
+    double Py = data(0)*loadFactor;
+    double Pz = data(1)*loadFactor;
+    double N  = data(2)*loadFactor;
+    double aOverL = data(3);
+
+    if (aOverL < 0.0 || aOverL > 1.0)
+      return 0;
+
+    double a = aOverL*L;
+
+    double Vy2 = Py*aOverL;
+    double Vy1 = Py-Vy2;
+
+    double Vz2 = Pz*aOverL;
+    double Vz1 = Pz-Vz2;
+
+    Matrix &s_p = *sp;
+
+    // Accumulate applied section forces due to element loads
+    for (int i = 0; i < numSections; i++) {
+      double x = xi[i]*L;
+      if (x <= a) {
+        s_p(0,i) += N;
+        s_p(1,i) -= x*Vy1;
+        s_p(2,i) += x*Vz1;
+      }
+      else {
+        s_p(1,i) -= (L-x)*Vy2;
+        s_p(2,i) += (L-x)*Vz2;
+      }
+    }
+
+    // Accumulate reactions in basic system
+    p0[0] -= N;
+    p0[1] -= Vy1;
+    p0[2] -= Vy2;
+    p0[3] -= Vz1;
+    p0[4] -= Vz2;
+
+
+  } else {
+    opserr << "mixedBeamColumn3d::addLoad() -- load type unknown for element with tag: " <<
+        this->getTag() << endln;
+
+    return -1;
+  }
+
+  return 0;
+}
 
 const Vector & mixedBeamColumn3d::getResistingForceIncInertia() {
 
@@ -1283,6 +1361,38 @@ Response* mixedBeamColumn3d::setResponse(const char **argv, int argc,
 
     theResponse = new ElementResponse(this, 1, theVector);
 
+  // local force -
+  } else if (strcmp(argv[0],"localForce") == 0 ||
+             strcmp(argv[0],"localForces") == 0) {
+
+    output.tag("ResponseType","N_ 1");
+    output.tag("ResponseType","Vy_1");
+    output.tag("ResponseType","Vz_1");
+    output.tag("ResponseType","T_1");
+    output.tag("ResponseType","My_1");
+    output.tag("ResponseType","Tz_1");
+    output.tag("ResponseType","N_2");
+    output.tag("ResponseType","Py_2");
+    output.tag("ResponseType","Pz_2");
+    output.tag("ResponseType","T_2");
+    output.tag("ResponseType","My_2");
+    output.tag("ResponseType","Mz_2");
+
+    theResponse = new ElementResponse(this, 2, theVector);
+
+  // basic or natural forces
+  } else if (strcmp(argv[0],"basicForce") == 0 ||
+             strcmp(argv[0],"basicForces") == 0) {
+
+    output.tag("ResponseType","N");
+    output.tag("ResponseType","Mz_1");
+    output.tag("ResponseType","Mz_2");
+    output.tag("ResponseType","My_1");
+    output.tag("ResponseType","My_2");
+    output.tag("ResponseType","T");
+
+    theResponse = new ElementResponse(this, 3, Vector(6));
+
   } else if (strcmp(argv[0],"section") ==0) {
     if (argc > 2) {
 
@@ -1313,39 +1423,81 @@ int mixedBeamColumn3d::getResponse(int responseID, Information &eleInfo) {
   if (responseID == 1) { // global forces
     return eleInfo.setVector(this->getResistingForce());
 
+  } else if (responseID == 2) { // local forces
+    // Axial
+    double N = internalForceOpenSees(0);
+    theVector(6) =  N;
+    theVector(0) = -N+p0[0];
+
+    // Torsion
+    double T = internalForceOpenSees(5);
+    theVector(9) =  T;
+    theVector(3) = -T;
+
+    // Moments about z and shears along y
+    double M1 = internalForceOpenSees(1);
+    double M2 = internalForceOpenSees(2);
+    theVector(5)  = M1;
+    theVector(11) = M2;
+    double L = crdTransf->getInitialLength();
+    double V = (M1+M2)/L;
+    theVector(1) =  V+p0[1];
+    theVector(7) = -V+p0[2];
+
+    // Moments about y and shears along z
+    M1 = internalForceOpenSees(3);
+    M2 = internalForceOpenSees(4);
+    theVector(4)  = M1;
+    theVector(10) = M2;
+    V = -(M1+M2)/L;
+    theVector(2) = -V+p0[3];
+    theVector(8) =  V+p0[4];
+
+    return eleInfo.setVector(theVector);
+
+  } else if (responseID == 3) { // basic forces
+    return eleInfo.setVector(internalForceOpenSees);
+
   } else {
     return -1;
 
   }
 }
 
-Vector mixedBeamColumn3d::getd_hat(int sec, const Vector &v, double L) {
+Vector mixedBeamColumn3d::getd_hat(int sec, const Vector &v, double L, bool geomLinear) {
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
-  double temp_x, temp_A, temp_B, temp_C, temp_D, temp_E, temp_F;
-
+  double x, C, E, F;
   Vector D_hat(NDM_SECTION);
   D_hat.Zero();
 
-  temp_x = L * xi[sec];
-  temp_A = 1 - 4 * ( temp_x / L ) + 3 * pow ( ( temp_x / L ) , 2 );
-  temp_B = - 2 * ( temp_x / L ) + 3 * pow ( ( temp_x / L ) , 2 );
-  temp_C = 1 / L;
-  temp_D = - 8 * temp_x / ( L * L ) + 4 / L;
-  temp_E = - 4 / L + 6 * temp_x / ( L * L );
-  temp_F =  - 2 / L + 6 * temp_x / ( L * L );
+  x = L*xi[sec];
+  C =  1/L;
+  E = -4/L + 6*x/(L*L);
+  F = -2/L + 6*x/(L*L);
 
-  D_hat(0) =  temp_C * v(0) +
-              0.5 * ( temp_C * temp_C * v(0) ) * v(0) +
-              0.5 * ( temp_A * temp_A * v(1) + temp_A * temp_B * v(3) ) * v(1) +
-              0.5 * ( temp_A * temp_A * v(2) + temp_A * temp_B * v(4) ) * v(2) +
-              0.5 * ( temp_A * temp_B * v(1) + temp_B * temp_B * v(3) ) * v(3) +
-              0.5 * ( temp_A * temp_B * v(2) + temp_B * temp_B * v(4) ) * v(4);
+  if (geomLinear) {
 
-  D_hat(1) =  temp_E * v(1) + temp_F * v(3);
+    D_hat(0) = C*v(0);
+    D_hat(1) = E*v(1) + F*v(3);
+    D_hat(2) = E*v(2) + F*v(4);
 
-  D_hat(2) =  temp_E * v(2) + temp_F * v(4);
+  } else {
+
+    double A,B;
+    A = 1 - 4*(x/L) + 3*pow(x/L,2);
+    B =   - 2*(x/L) + 3*pow(x/L,2);
+
+    D_hat(0) =  C * v(0) + 0.5 * ( C*C*v(0) ) * v(0) +
+                0.5 * ( A*A*v(1) + A*B*v(3) ) * v(1) +
+                0.5 * ( A*A*v(2) + A*B*v(4) ) * v(2) +
+                0.5 * ( A*B*v(1) + B*B*v(3) ) * v(3) +
+                0.5 * ( A*B*v(2) + B*B*v(4) ) * v(4);
+    D_hat(1) =  E*v(1) + F*v(3);
+    D_hat(2) =  E*v(2) + F*v(4);
+
+  }
 
   return D_hat;
 }
@@ -1377,33 +1529,65 @@ Matrix mixedBeamColumn3d::getKg(int sec, double P, double L) {
   return kg;
 }
 
-
-Matrix mixedBeamColumn3d::getNld_hat(int sec, const Vector &v, double L) {
+Matrix mixedBeamColumn3d::getMd(int sec, Vector dShapeFcn, Vector dFibers, double L) {
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
-  double temp_x, temp_A, temp_B, temp_C, temp_D, temp_E, temp_F;
+  double x, A, B;
 
-  temp_x = L * xi[sec];
-  temp_A = 1 - 4 * ( temp_x / L ) + 3 * pow ( ( temp_x / L ) , 2 );
-  temp_B = - 2 * ( temp_x / L ) + 3 * pow ( ( temp_x / L ) , 2 );
-  temp_C =  1 / L;
-  temp_D = - 8 * temp_x / ( L * L ) + 4 / L;
-  temp_E = - 4 / L + 6 * temp_x / ( L * L );
-  temp_F =  - 2 / L + 6 * temp_x / ( L * L );
+  Matrix md(NDM_NATURAL,NDM_NATURAL);
+  md.Zero();
 
+  x = L*xi[sec];
+  A =  ( x/L - 2*pow(x/L,2) + pow(x/L,3) )*L;
+  B =          (-pow(x/L,2) + pow(x/L,3) )*L;
+
+  md(0,1) = A * ( dShapeFcn(1) - dFibers(1) );
+  md(0,2) = A * ( dShapeFcn(2) - dFibers(2) );
+  md(0,3) = B * ( dShapeFcn(1) - dFibers(1) );
+  md(0,4) = B * ( dShapeFcn(2) - dFibers(2) );
+
+  return md;
+}
+
+Matrix mixedBeamColumn3d::getNld_hat(int sec, const Vector &v, double L, bool geomLinear) {
+  double xi[maxNumSections];
+  beamIntegr->getSectionLocations(numSections, L, xi);
+
+  double x, C, E, F;
   Matrix Nld_hat(NDM_SECTION,NDM_NATURAL);
   Nld_hat.Zero();
 
-  Nld_hat(0,0) = temp_C + temp_C * temp_C * v(0);
-  Nld_hat(0,1) =  temp_A * temp_A * v(1) + temp_A * temp_B * v(3);
-  Nld_hat(0,2) =  temp_A * temp_A * v(2) + temp_A * temp_B * v(4);
-  Nld_hat(0,3) =  temp_A * temp_B * v(1) + temp_B * temp_B * v(3);
-  Nld_hat(0,4) =  temp_A * temp_B * v(2) + temp_B * temp_B * v(4);
-  Nld_hat(1,1) = temp_E;
-  Nld_hat(1,3) = temp_F;
-  Nld_hat(2,2) = temp_E;
-  Nld_hat(2,4) = temp_F;
+  x = L*xi[sec];
+
+  C =  1/L;
+  E = -4/L + 6*x/(L*L);
+  F = -2/L + 6*x/(L*L);
+
+  if (geomLinear) {
+
+    Nld_hat(0,0) = C;
+    Nld_hat(1,1) = E;
+    Nld_hat(1,3) = F;
+    Nld_hat(2,2) = E;
+    Nld_hat(2,4) = F;
+
+  } else {
+
+    double A,B;
+    A = 1 - 4 * ( x / L ) + 3 * pow ( ( x / L ) , 2 );
+    B =   - 2 * ( x / L ) + 3 * pow ( ( x / L ) , 2 );
+
+    Nld_hat(0,0) = C + C*C*v(0);
+    Nld_hat(0,1) = A*A*v(1) + A*B*v(3);
+    Nld_hat(0,2) = A*A*v(2) + A*B*v(4);
+    Nld_hat(0,3) = A*B*v(1) + B*B*v(3);
+    Nld_hat(0,4) = A*B*v(2) + B*B*v(4);
+    Nld_hat(1,1) = E;
+    Nld_hat(1,3) = F;
+    Nld_hat(2,2) = E;
+    Nld_hat(2,4) = F;
+  }
 
   return Nld_hat;
 }
@@ -1430,30 +1614,41 @@ Matrix mixedBeamColumn3d::getNd2(int sec, double P, double L) {
   return Nd2;
 }
 
-Matrix mixedBeamColumn3d::getNd1(int sec, const Vector &v, double L) {
+Matrix mixedBeamColumn3d::getNd1(int sec, const Vector &v, double L, bool geomLinear) {
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
-  double temp_x, temp_A, temp_B;
-
-  temp_x = L * xi[sec];
-
-  temp_A = L * ( temp_x / L - 2 * pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[1]
-           + L * ( - pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[3];
-
-  temp_B = L * ( temp_x / L - 2 * pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[2]
-           + L * ( - pow( temp_x / L, 2 ) + pow( temp_x / L, 3 ) ) * v[4];
+  double x = L*xi[sec];
 
   Matrix Nd1(NDM_SECTION,NDM_NATURAL);
   Nd1.Zero();
 
-  Nd1(0,0)   = 1.0;
-  Nd1(1,0)   = temp_A;
-  Nd1(1,1)   = - temp_x / L + 1.0;
-  Nd1(1,3)   = temp_x / L;
-  Nd1(2,0)   = temp_B;
-  Nd1(2,2)   = - temp_x / L + 1.0;
-  Nd1(2,4)   = temp_x / L;
+  if (geomLinear) {
+
+    Nd1(0,0)   = 1.0;
+    Nd1(1,1)   = -x/L + 1.0;
+    Nd1(1,3)   =  x/L;
+    Nd1(2,2)   = -x/L + 1.0;
+    Nd1(2,4)   =  x/L;
+
+  } else {
+
+    double A,B;
+
+    A = L * ( x/L - 2*pow(x/L,2) + pow(x/L,3) ) * v[1]
+             + L * ( -pow(x/L,2) + pow(x/L,3) ) * v[3];
+
+    B = L * ( x/L - 2*pow(x/L,2) + pow(x/L,3) ) * v[2]
+             + L * ( -pow(x/L,2) + pow(x/L,3) ) * v[4];
+
+    Nd1(0,0)   = 1.0;
+    Nd1(1,0)   = A;
+    Nd1(1,1)   = -x/L + 1.0;
+    Nd1(1,3)   =  x/L;
+    Nd1(2,0)   = B;
+    Nd1(2,2)   = -x/L + 1.0;
+    Nd1(2,4)   =  x/L;
+  }
 
   return Nd1;
 }
