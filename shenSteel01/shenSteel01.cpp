@@ -17,11 +17,11 @@
 **   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
 **                                                                    **
 ** ****************************************************************** */
-                                                                        
+
 // $Revision: 1.1 $
 // $Date: 2010/05/04 17:14:46 $
 // $Source: /cvsroot/openseescomp/CompositePackages/shenSteel01/shenSteel01.cpp,v $
-                                                                        
+
 // Documentation: Shen Steel Model
 // uniaxialMaterial shenSteel01 $tag $Fy $Fu $Es $kappaBar0 $Ep0i $alpha $a $b $c $omega $zeta $e $f <options>
 //
@@ -146,7 +146,7 @@ OPS_shenSteel01()
   numData = 13;
   if (OPS_GetDoubleInput(&numData, dData) != 0) {
 	opserr << "WARNING invalid input, want: uniaxialMaterial shenSteel01 tag Fy Fu Es kappaBar0 Ep0i alpha a b c omega zeta e f <options> \n";
-    return 0;	
+    return 0;
   }
   Fy = dData[0];  Fu = dData[1];  Es = dData[2];
   kappaBar0 = dData[3];  Ep0i = dData[4];
@@ -162,12 +162,12 @@ OPS_shenSteel01()
   if ( Fu < Fy ) {
 	  opserr << "WARNING Fy greater than Fu\n";
 	  return 0;
-  }  
+  }
   if ( Es <= 0 ) {
 	  opserr << "WARNING Es should be a positive value\n";
 	  return 0;
-  }  
-  
+  }
+
   // Loop through remaining arguments
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
 	  if ( OPS_GetString(sData, sDataLength) != 0 ) {
@@ -276,7 +276,7 @@ OPS_shenSteel01()
 		  opserr << "WARNING unknown option " << sData << "\n";
 	  }
   }
-  
+
   theMaterial = new shenSteel01(tag, Fy, Fu, Es,
 		  kappaBar0, Ep0i, alpha, a, b, c, omega, zeta, e, f,
 		  modelYieldPlateau, M, Epst, epst,
@@ -290,7 +290,7 @@ OPS_shenSteel01()
     opserr << "WARNING could not create uniaxialMaterial of type shenSteel01 \n";
     return 0;
   }
- 
+
   return theMaterial;
 }
 
@@ -332,7 +332,7 @@ shenSteel01::~shenSteel01()
   // does nothing
 }
 
-int 
+int
 shenSteel01::setTrialStrain(double strain, double strainRate)
 {
 //    // Open file for debugging if needed
@@ -359,7 +359,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 	// Check if the strain has changed
 	if ( trialStrain == committedStrain )
 		return 0;
-	
+
 	// Determine status w.r.t. plasticity model (i.e., ignoring local buckling)
 	switch ( commitedPlasticityStatus ) {
 	case 0 :
@@ -423,7 +423,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 	// Initialize Variables
 	double delta, h, Ep, Epo;
 	Epo = Epoi / ( 1 + w * W ); // Slope of the Bounding Surface
-	
+
 	// Check for unloading from tensile plasticity and update appropriate variables
 	if ( commitedPlasticityStatus == 1 && plasticityStatus != 1 ){
 		// Local Buckling Stuff
@@ -438,7 +438,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			localBucklingConstantResidualStress = localBucklingCyclicReduction*localBucklingBaseConstantResidualStress;
 			localBucklingBoundingStress = localBucklingConstantResidualStress;
 		}
-		
+
 		// Virtual Bounding Line Stuff
 		delta_yForC = (Epo * ep + Cmax_strs) - committedStress;
 		if ( delta_yForC <= 0.0)
@@ -446,7 +446,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		if ( commitedYieldPlateauStatus == 2)
 			yieldPlateauStatus = 0;
 	}
-	
+
 	// Check for unloading from compressive plasticity and update appropriate variables
 	if ( commitedPlasticityStatus == 2 && plasticityStatus != 2 ){
 		// Virtual Bounding Line Stuff
@@ -464,7 +464,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		trialTangent = Ee;
 		trialStress = committedStress + strainIncrement * trialTangent;
 		break;
-		
+
 	case 1 :
 		// Moving in the tensile or positive direction
 		lastYieldedIn = 1;
@@ -477,7 +477,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			}
 
 			delta = delta_in;
-			h = e * delta + fE * Ee;
+			h = e * delta + fE;
 			if ( committedStress < Epo * ep + Cmax_strs ) {
 				// Within the memory surface
 				Ep = Epo + h * ( delta + delta_yForT ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
@@ -503,7 +503,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		} else {
 			// If continued plastic loading
 			delta = fabs( Epo * ep + Tbs_p - committedStress);
-			h = e * delta + fE * Ee;
+			h = e * delta + fE;
 			if ( committedStress < Epo * ep + Cmax_strs ) {
 				// Within the memory surface
 				Ep = Epo + h * ( delta + delta_yForT ) / ( delta_in - delta );
@@ -564,7 +564,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			}
 		}
 		break;
-		
+
 	case 2 :
 		// Moving in the compressive or negative direction
 		lastYieldedIn = 2;
@@ -576,7 +576,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 				delta_in = fabs( Epo * ep + Tbs_n - Tls_n);
 			}
 			delta = delta_in;
-			h = e * delta + fE * Ee;
+			h = e * delta + fE;
 			if ( committedStress > Epo * ep - Cmax_strs ) {
 				// Within the memory surface
 				Ep = Epo + h * ( delta + delta_yForC ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
@@ -595,7 +595,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		} else {
 			// If continued plastic loading
 			delta = fabs( Epo * ep + Tbs_n - committedStress);
-			h = e * delta + fE * Ee;
+			h = e * delta + fE;
 			if ( committedStress > Epo * ep - Cmax_strs ) {
 				// Within the memory surface
 				Ep = Epo + h * ( delta + delta_yForC ) / ( delta_in - delta );
@@ -650,7 +650,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			}
 		}
 		break;
-		
+
 	default :
 		// It should not arrive here
 		opserr << "Trouble in shenSteel01::setTrialStrain (2) \n";
@@ -815,8 +815,9 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		localBucklingReferenceWork = W;
 
 	// Size of the Bounding Surface
-	Tbs_p =   ( fu + ( Rbso - fu ) * exp ( - pow( fy / Ee, -2 )* ksi  * pow ( 0.5 * ebar_p, 2 ) ) );
-	Tbs_n = - ( fu + ( Rbso - fu ) * exp ( - pow( fy / Ee, -2 )* ksi  * pow ( 0.5 * ebar_p, 2 ) ) );
+	double rho = 0.5*ebar_p;
+	Tbs_p =   ( fu + ( Rbso - fu ) * exp ( -ksi*rho*rho ) );
+	Tbs_n = - ( fu + ( Rbso - fu ) * exp ( -ksi*rho*rho ) );
 	if ( modelLocalBuckling && localBucklingHistory != 0 && Tbs_n > localBucklingBoundingStress ) {
 		Tbs_n = localBucklingBoundingStress;
 	}
@@ -855,7 +856,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 	return 0;
 }
 
-double 
+double
 shenSteel01::getStrain(void)
 {
 	if (initStress == 0.0) {
@@ -865,25 +866,25 @@ shenSteel01::getStrain(void)
 	}
 }
 
-double 
+double
 shenSteel01::getStress(void)
 {
   return trialStress;
 }
 
-double 
+double
 shenSteel01::getInitialTangent(void)
 {
 	return Ee;
 }
 
-double 
+double
 shenSteel01::getTangent(void)
 {
   return trialTangent;
 }
 
-int 
+int
 shenSteel01::commitState(void)
 {
 	// State Variables
@@ -934,7 +935,7 @@ shenSteel01::commitState(void)
 }
 
 
-int 
+int
 shenSteel01::revertToLastCommit(void)
 {
 	// State Variables
@@ -985,7 +986,7 @@ shenSteel01::revertToLastCommit(void)
 }
 
 
-int 
+int
 shenSteel01::revertToStart(void)
 {
 	// State Variables
@@ -1168,14 +1169,14 @@ shenSteel01::getCopy(void)
 }
 
 
-int 
+int
 shenSteel01::sendSelf(int cTag, Channel &theChannel)
 {
 	// @todo work on this.
 	return -1;
 }
 
-int 
+int
 shenSteel01::recvSelf(int cTag, Channel &theChannel,
 				 FEM_ObjectBroker &theBroker)
 {
@@ -1183,7 +1184,7 @@ shenSteel01::recvSelf(int cTag, Channel &theChannel,
 	return -1;
 }
 
-void 
+void
 shenSteel01::Print(OPS_Stream &s, int flag)
 {
 	s<<"shenSteel01, tag: "<<this->getTag()<<endln;
