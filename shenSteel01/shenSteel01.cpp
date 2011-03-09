@@ -439,20 +439,24 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 			localBucklingBoundingStress = localBucklingConstantResidualStress;
 		}
 
-		// Virtual Bounding Line Stuff
+		// Virtual Bounding Line
 		delta_yForC = (Epo * ep + Cmax_strs) - committedStress;
 		if ( delta_yForC <= 0.0)
 			delta_yForC = 0.0;
+
+		// Yield Plateau
 		if ( commitedYieldPlateauStatus == 2)
 			yieldPlateauStatus = 0;
 	}
 
 	// Check for unloading from compressive plasticity and update appropriate variables
 	if ( commitedPlasticityStatus == 2 && plasticityStatus != 2 ){
-		// Virtual Bounding Line Stuff
+		// Virtual Bounding Line
 		delta_yForT = committedStress - (Epo * ep - Cmax_strs);
 		if ( delta_yForT <= 0.0)
 			delta_yForT = 0.0;
+
+		// Yield Plateau
 		if ( commitedYieldPlateauStatus == 2)
 			yieldPlateauStatus = 0;
 	}
@@ -469,6 +473,10 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		// Moving in the tensile or positive direction
 		lastYieldedIn = 1;
 
+    if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && committedStress >= fy ) {
+      // In the yield plateau and can skip the plasticity formulation
+      trialStress = committedStress;
+    } else {
 		// Compute the stress and tangent
 		if ( commitedPlasticityStatus != 1 ) {
 			// If immediately after elastic loading then compute delta_in
@@ -526,6 +534,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 				trialTangent =  Epo;
 			}
 		}
+    }
 
 		if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && trialStress >= fy ) {
 			if ( commitedPlasticityStatus == 0 ) {
@@ -569,6 +578,10 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		// Moving in the compressive or negative direction
 		lastYieldedIn = 2;
 
+		if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && committedStress <= -fy ) {
+		  // In the yield plateau and can skip the plasticity formulation
+		  trialStress = committedStress;
+		} else {
 		// Compute the stress and tangent
 		if ( commitedPlasticityStatus != 2 ) {
 			// If immediately after elastic loading then compute delta_in
@@ -611,6 +624,7 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 				trialStress = Epo * ep + Tbs_n;
 				trialTangent = Epo;
 			}
+		}
 		}
 
 		if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && trialStress <= -fy ) {
@@ -850,8 +864,8 @@ shenSteel01::setTrialStrain(double strain, double strainRate)
 		Tls_n = Tbs_n;
 
 	// Maximum Stress Seen by the Material
-	if( fabs(trialStress) > Cmax_strs )
-		Tmax_strs = fabs(trialStress);
+	if( fabs(trialStress-Epo*ep) > Cmax_strs )
+		Tmax_strs = fabs(trialStress-Epo*ep);
 
 	return 0;
 }
