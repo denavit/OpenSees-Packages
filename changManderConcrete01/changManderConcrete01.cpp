@@ -92,7 +92,7 @@ OPS_changManderConcrete01()
 
   numData = 1;
   if (OPS_GetIntInput(&numData, iData) != 0) {
-    opserr << "WARNING invalid uniaxialMaterial changManderConcrete01 tag" << endln;
+    opserr << "WARNING invalid uniaxialMaterial changManderConcrete01 tag \n" << endln;
     return 0;
   }
 
@@ -104,39 +104,39 @@ OPS_changManderConcrete01()
   
   // Check the data
   if ( dData[0] >= 0 ) {
-	  opserr << "WARNING fcc should be input as a negative value";
+	  opserr << "WARNING fcc should be input as a negative value \n";
 	  return 0;
   }
   if ( dData[1] >= 0 ) {
-	  opserr << "WARNING ecc should be input as a negative value";
+	  opserr << "WARNING ecc should be input as a negative value \n";
 	  return 0;	  
   }
   if ( dData[2] <= 0 ) {
-	  opserr << "WARNING Ec should be a positive value";
+	  opserr << "WARNING Ec should be a positive value \n";
 	  return 0;	  
   }
   if ( dData[3] <= 0 ) {
-	  opserr << "WARNING rn_pre should be a positive value";
+	  opserr << "WARNING rn_pre should be a positive value \n";
 	  return 0;	  
   }
   if ( dData[4] <= 0 ) {
-	  opserr << "WARNING rn_post should be a positive value";
+	  opserr << "WARNING rn_post should be a positive value \n";
 	  return 0;	  
   }  
   if ( dData[5] < 0 ) {
-	  opserr << "WARNING ft should be input as a positive value";
+	  opserr << "WARNING ft should be input as a positive value \n";
 	  return 0;	  
   }  
   if ( dData[6] < 0 ) {
-	  opserr << "WARNING et should be input as a positive value";
+	  opserr << "WARNING et should be input as a positive value \n";
 	  return 0;	  
   }  
   if ( dData[7] <= 0 ) {
-	  opserr << "WARNING rp should be a positive value";
+	  opserr << "WARNING rp should be a positive value \n";
 	  return 0;	  
   }    
   if ( dData[8] <= 1 ) {
-	  opserr << "WARNING xp_cr should be greater than 1.0";
+	  opserr << "WARNING xp_cr should be greater than 1.0 \n";
 	  return 0;	  
   }    
   
@@ -146,7 +146,7 @@ OPS_changManderConcrete01()
   // Loop through remaining arguments
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
 	  if ( OPS_GetString(sData, sDataLength) != 0 ) {
-		  opserr << "WARNING invalid input";
+		  opserr << "WARNING invalid input \n";
 		  return 0;
 	  }
 
@@ -157,7 +157,7 @@ OPS_changManderConcrete01()
 		    return 0;
 		  }
 		  if ( xn_cr <= 1.0 ) {
-			  opserr << "WARNING xn_cr should be greater than 1.0";
+			  opserr << "WARNING xn_cr should be greater than 1.0 \n";
 			  return 0;
 		  }
 
