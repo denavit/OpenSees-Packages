@@ -160,7 +160,6 @@ class mixedBeamColumn2d : public Element
     Matrix *commitedSectionFlexibility;
 
     // static data - single copy for all objects of the class
-    static int maxNumSections;
     static Matrix theMatrix;
     static Vector theVector;
     static double workArea[];

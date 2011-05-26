@@ -59,6 +59,7 @@
 #define  NEGD  6                      // number of element global dof's
 #define  NDM_SECTION  2               // number of section dof's without torsio
 #define  NDM_NATURAL  3               // number of element dof's in the basic system without torsion
+#define  MAX_NUM_SECTIONS  10         // maximum number of sections allowed
 
 using namespace std;
 
@@ -66,7 +67,6 @@ using namespace std;
 Matrix mixedBeamColumn2d::theMatrix(NEGD,NEGD);
 Vector mixedBeamColumn2d::theVector(NEGD);
 double mixedBeamColumn2d::workArea[400];
-int mixedBeamColumn2d::maxNumSections = 10;
 
 Vector *mixedBeamColumn2d::sectionDefShapeFcn = 0;
 Matrix *mixedBeamColumn2d::nldhat = 0;
@@ -78,7 +78,6 @@ Matrix *mixedBeamColumn2d::nd2T = 0;
 
 
 #ifdef _USRDLL
-#include <windows.h>
 #define OPS_Export extern "C" _declspec(dllexport)
 #elif _MACOSX
 #define OPS_Export extern "C" __attribute__((visibility("default")))
@@ -322,7 +321,7 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
 
 
    //this->setSectionPointers(numSec,sec);
-   if (numSec > maxNumSections) {
+   if (numSec > MAX_NUM_SECTIONS) {
      opserr << "Error: mixedBeamColumn2d::setSectionPointers -- max number of sections exceeded";
    }
 
@@ -396,24 +395,24 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
    kvcommit.Zero();
 
    if (sectionDefShapeFcn == 0)
-     sectionDefShapeFcn  = new Vector [maxNumSections];
+     sectionDefShapeFcn  = new Vector [MAX_NUM_SECTIONS];
    if (nldhat == 0)
-     nldhat  = new Matrix [maxNumSections];
+     nldhat  = new Matrix [MAX_NUM_SECTIONS];
    if (nd1 == 0)
-     nd1  = new Matrix [maxNumSections];
+     nd1  = new Matrix [MAX_NUM_SECTIONS];
    if (nd2 == 0)
-     nd2  = new Matrix [maxNumSections];
+     nd2  = new Matrix [MAX_NUM_SECTIONS];
    if (nd1T == 0)
-     nd1T  = new Matrix [maxNumSections];
+     nd1T  = new Matrix [MAX_NUM_SECTIONS];
    if (nd2T == 0)
-     nd2T  = new Matrix [maxNumSections];
+     nd2T  = new Matrix [MAX_NUM_SECTIONS];
    if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
      opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";
      exit(-1);
    }
 
    int i;
-   for ( i=0; i<maxNumSections; i++ ){
+   for ( i=0; i<MAX_NUM_SECTIONS; i++ ){
      nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
      nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
    }
@@ -487,24 +486,24 @@ mixedBeamColumn2d::mixedBeamColumn2d():
   kvcommit.Zero();
 
   if (sectionDefShapeFcn == 0)
-     sectionDefShapeFcn  = new Vector [maxNumSections];
+     sectionDefShapeFcn  = new Vector [MAX_NUM_SECTIONS];
   if (nldhat == 0)
-     nldhat  = new Matrix [maxNumSections];
+     nldhat  = new Matrix [MAX_NUM_SECTIONS];
   if (nd1 == 0)
-     nd1  = new Matrix [maxNumSections];
+     nd1  = new Matrix [MAX_NUM_SECTIONS];
   if (nd2 == 0)
-     nd2  = new Matrix [maxNumSections];
+     nd2  = new Matrix [MAX_NUM_SECTIONS];
   if (nd1T == 0)
-     nd1T  = new Matrix [maxNumSections];
+     nd1T  = new Matrix [MAX_NUM_SECTIONS];
   if (nd2T == 0)
-     nd2T  = new Matrix [maxNumSections];
+     nd2T  = new Matrix [MAX_NUM_SECTIONS];
   if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
     opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";
     exit(-1);
   }
 
   int i;
-  for ( i=0; i<maxNumSections; i++ ){
+  for ( i=0; i<MAX_NUM_SECTIONS; i++ ){
     nd1T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
     nd2T[i] = Matrix(NDM_NATURAL,NDM_SECTION);
   }
@@ -730,7 +729,7 @@ int mixedBeamColumn2d::revertToStart() {
   initialLength = crdTransf->getInitialLength();
 
   // Get the numerical integration weights
-  double wt[maxNumSections]; // weights of sections or gauss points of integration points
+  double wt[MAX_NUM_SECTIONS]; // weights of sections or gauss points of integration points
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
   // Vector of zeros to use at initial natural displacements
@@ -897,11 +896,12 @@ int mixedBeamColumn2d::update() {
   lastNaturalDisp = naturalDisp;
 
   // Get the numerical integration weights
-  double wt[maxNumSections]; // weights of sections or gauss points of integration points
+  double wt[MAX_NUM_SECTIONS]; // weights of sections or gauss points of integration points
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
   // Define Variables
-  Vector sectionForceShapeFcn[numSections];
+  Vector *sectionForceShapeFcn;
+  sectionForceShapeFcn = new Vector [numSections];
   for ( i = 0; i < numSections; i++ ) {
     sectionForceShapeFcn[i] = Vector(NDM_SECTION);
   }
@@ -1078,7 +1078,7 @@ int mixedBeamColumn2d::addLoad(ElementalLoad *theLoad, double loadFactor) {
 
   double L = crdTransf->getInitialLength();
 
-  double xi[maxNumSections];
+  double xi[MAX_NUM_SECTIONS];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   if (type == LOAD_TAG_Beam2dUniformLoad) {
@@ -1184,9 +1184,9 @@ void mixedBeamColumn2d::Print(OPS_Stream &s, int flag) {
 
   } else if (flag == 33) {
     s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn2d ";
-    double xi[maxNumSections]; // location of sections or gauss points or integration points
+    double xi[MAX_NUM_SECTIONS]; // location of sections or gauss points or integration points
     beamIntegr->getSectionLocations(numSections, initialLength, xi);
-    double wt[maxNumSections]; // weights of sections or gauss points of integration points
+    double wt[MAX_NUM_SECTIONS]; // weights of sections or gauss points of integration points
     beamIntegr->getSectionWeights(numSections, initialLength, wt);
     s << "\n section xi wt";
     for (int i = 0; i < numSections; i++)
@@ -1265,7 +1265,7 @@ Response* mixedBeamColumn2d::setResponse(const char **argv, int argc,
       int sectionNum = atoi(argv[1]);
       if (sectionNum > 0 && sectionNum <= numSections) {
 
-        double xi[maxNumSections];
+        double xi[MAX_NUM_SECTIONS];
         double L = crdTransf->getInitialLength();
         beamIntegr->getSectionLocations(numSections, L, xi);
 
@@ -1318,7 +1318,7 @@ int mixedBeamColumn2d::getResponse(int responseID, Information &eleInfo) {
 
 Vector
 mixedBeamColumn2d::getd_hat(int sec, const Vector &v, double L, bool geomLinear){
-  double xi[maxNumSections];
+  double xi[MAX_NUM_SECTIONS];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, C, E, F;
@@ -1354,7 +1354,7 @@ mixedBeamColumn2d::getd_hat(int sec, const Vector &v, double L, bool geomLinear)
 
 Matrix
 mixedBeamColumn2d::getKg(int sec, double P, double L) {
-  double xi[maxNumSections];
+  double xi[MAX_NUM_SECTIONS];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, A, B;
@@ -1376,7 +1376,7 @@ mixedBeamColumn2d::getKg(int sec, double P, double L) {
 }
 
 Matrix mixedBeamColumn2d::getMd(int sec, Vector dShapeFcn, Vector dFibers, double L) {
-  double xi[maxNumSections];
+  double xi[MAX_NUM_SECTIONS];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, A, B;
@@ -1395,7 +1395,7 @@ Matrix mixedBeamColumn2d::getMd(int sec, Vector dShapeFcn, Vector dFibers, doubl
 }
 
 Matrix mixedBeamColumn2d::getNld_hat(int sec, const Vector &v, double L, bool geomLinear) {
-  double xi[maxNumSections];
+  double xi[MAX_NUM_SECTIONS];
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, C, E, F;
@@ -1432,7 +1432,7 @@ Matrix mixedBeamColumn2d::getNld_hat(int sec, const Vector &v, double L, bool ge
 
 Matrix
 mixedBeamColumn2d::getNd2(int sec, double P, double L){
-   double xi[maxNumSections];
+   double xi[MAX_NUM_SECTIONS];
    beamIntegr->getSectionLocations(numSections, L, xi);
 
    double x, A, B;
@@ -1454,7 +1454,7 @@ mixedBeamColumn2d::getNd2(int sec, double P, double L){
 
 Matrix
 mixedBeamColumn2d::getNd1(int sec, const Vector &v, double L, bool geomLinear){
-   double xi[maxNumSections];
+   double xi[MAX_NUM_SECTIONS];
    beamIntegr->getSectionLocations(numSections, L, xi);
 
    double x = L * xi[sec];
