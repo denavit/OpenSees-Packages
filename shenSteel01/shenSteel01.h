@@ -25,7 +25,7 @@
 /* ****************************************************************** **
 **                                                                    **
 ** This file was developed by:                                        **
-**   Mark D. Denavit, University of Illinois at Urbana Champaign      **
+**   Mark D. Denavit, University of Illinois at Urbana-Champaign      **
 **   Jerome F. Hajjar, Northeastern University                        **
 **                                                                    **
 ********************************************************************* */
@@ -40,10 +40,10 @@
 class shenSteel01 : public UniaxialMaterial
 {
   public:
-    shenSteel01(int tag, double iA1, double iA2, double iA3,
+    shenSteel01(int tag, double iA1, double iA2, double iA3, double iA4,
         double iB1, double iB2, double iB3, double iB4, double iB5, double iB6, double iB7, double iB8, double iB9, double iB10,
         bool iC1, double iC2, double iC3, double iC4,
-        double iD1, double iD2, double iD3,
+        bool iD1, double iD2, double iD3, double iD4,
         bool iE1, double iE2, double iE3, double iE4, int iE5,
         bool iF1, double iF2, double iF3,
         bool iG1, double iG2, double iG3,
@@ -76,10 +76,11 @@ class shenSteel01 : public UniaxialMaterial
 
   private:
     // Input Variables
-    double fy, fu, Ee; // steel yield strength, steel ultimate strength, steel elastic modulus
+    double fy, fu, Ee, eu; // steel yield strength, steel ultimate strength, steel elastic modulus
     double Rbso, Epoi, alfa, a, bb, c, w, ksi, e, fE; //parameters from the Japanese material model
     bool modelYieldPlateau; // flag for modeling the yield plateau (true = yield plateau modeled)
     double M, Est, est; // yield plateau parameters
+    bool modelFirstExcursion; // flag for modeling the first excursion (true = first excursion modeled)
     double initStress; // initial stress (for residual stress)
     double alphaLat; // biaxial stress ratio
     double ep0; // initial plastic strain
@@ -103,7 +104,8 @@ class shenSteel01 : public UniaxialMaterial
 
     // Flags to determine the general state of the material
     int plasticityStatus, commitedPlasticityStatus; // flag for the status of the plasticity: 0 = Elastic, 1 = Tensile Plastic, 2 = Compressive Plastic
-    int yieldPlateauStatus, commitedYieldPlateauStatus; // flag for the status of the yield plateau: 0 = Vanished (not in post plateau status), 1 = Not Vanished, 2 = Vanished and in post plateau status
+    int yieldPlateauStatus, commitedYieldPlateauStatus; // flag for the status of the yield plateau: 0 = Vanished, 1 = Not Vanished
+    int firstExcursionStatus, commitedFirstExcursionStatus; // flag for the status of the first excursion: 0 = Completed, 1 = Not Completed
     int localBucklingStatus, commitedLocalBucklingStatus; //flag if local buckling is occurring: 0=NOT occurring, 1=IS occurring and in descending branch, 2=IS occurring and in constant branch
     int localBucklingHistory, commitedLocalBucklingHistory; //flag for local buckling history: 0=not local buckling yet, 1=some lb, still in the descending branch, 2=some lb, in the constant branch
     int loadingDirection, committedLoadingDirection; //flag for direction of loading: 0=not set yet 1=positive 2=negative
@@ -118,6 +120,7 @@ class shenSteel01 : public UniaxialMaterial
     double epmin, Cepmin, epmax, Cepmax; //minimum and maximum plastic strains experienced by the fiber
     double W, CW; //accumulated plastic work
     double Cmax_strs, Tmax_strs; //maximum stress attained by the material (for size of memory surface)
+    double Epo; // Slope of the Bounding Surface
 
     // Updated upon transition from elastic to plastic
     double delta_in, Cdelta_in; //value of delta at the initial yield state in the current loading path
@@ -134,6 +137,13 @@ class shenSteel01 : public UniaxialMaterial
     double localBucklingBaseConstantResidualStress, committedLocalBucklingBaseConstantResidualStress; // base constant residual local buckling stress (before cyclic reduction)
     double localBucklingConstantResidualStress, committedLocalBucklingConstantResidualStress; //constant residual local buckling stress
     double localBucklingBoundingStress, committedLocalBucklingBoundingStress; //local buckling bounding stress
+
+    //
+    double esh, Cesh;
+    double firstExcursionStress, commitedFirstExcursionStress;
+
+    // Useful Function
+    void plasticityModel(double strainIncrement, double initialStress, double initialTangent, double &finalStress, double &finalTangent);
 };
 
 

@@ -23,13 +23,14 @@
 // $Source: /cvsroot/openseescomp/CompositePackages/shenSteel01/shenSteel01.cpp,v $
 
 // Documentation: Shen Steel Model
-// uniaxialMaterial shenSteel01 $tag $Fy $Fu $Es $kappaBar0 $Ep0i $alpha $a $b $c $omega $zeta $e $f <options>
+// uniaxialMaterial shenSteel01 $tag $Es $Fy $Fu $eu $kappaBar0 $Ep0i $alpha $a $b $c $omega $zeta $e $f <options>
 //
 // Required Input Parameters:
 //   $tag                   integer tag identifying material
+//   $Es                    modulus of elasticity
 //   $Fy                    yield stress
 //   $Fu                    ultimate stress
-//   $Es                    modulus of elasticity
+//   $eu                    strain at ultimate stress
 //   $kappaBar0             size of the initial bounding lines
 //   $Ep0i                  slope of the initial bounding lines
 //   $alpha, $a, $b, $c     constants in the equation to compute the reduction in the elastic range
@@ -38,16 +39,19 @@
 //   $e, $f                 constants in the equation to compute the shape parameter (for the plastic modulus)
 //
 // Optional Input:
-//   -yieldPlateau $epst $Epst $M
+//   -hotRolled $epst $M $Epst
 //     $epst                plastic strain at the end of the yield plateau under monotonic loading
-//     $Epst                plastic modulus at initial hardening under monotonic loading
 //     $M                   constant in the equation to determine if the yield plateau still continues
+//     $Epst                plastic modulus at initial hardening under monotonic loading
+//   -coldFormed $ep0 $Epst
+//     $ep0                 value of the initial plastic strain
+//     $Epst                plastic modulus at initial hardening under monotonic loading
+//   -coldFormed2 $ep0
+//     $ep0                 value of the initial plastic strain
 //   -initialStress $sigma0
 //     $sigma0              value of the initial stress (must be in the elastic range)
 //   -biaxialStress $alphaLat
 //     $alphaLat            ratio of stress in the lateral direction to yield stress (must be in the elastic range)
-//   -initialPlasticStrain $ep0
-//     $ep0                 value of the initial plastic strain
 //   -localBuckling $elb $Ksft $alphaFulb $ref
 //     $elb                 strain at initiation of local buckling
 //     $Ksft                slope of the descending branch of the local buckling model
@@ -108,7 +112,7 @@ OPS_Export void *OPS_shenSteel01() {
   // Variables to temporarily store data
   // Required (no need to initialize)
   int tag;
-  double Fy, Fu, Es, kappaBar0, Ep0i, alpha, a, b, c, omega, zeta, e, f;
+  double Es, Fy, Fu, eu, kappaBar0, Ep0i, alpha, a, b, c, omega, zeta, e, f;
   // Option (initialize to default values)
   bool modelYieldPlateau = false;
   double epst = 0.0;
@@ -118,6 +122,7 @@ OPS_Export void *OPS_shenSteel01() {
   double alphaLat = 0.0;
   double ep0 = 0.0;
   bool modelLocalBuckling = false;
+  bool modelFirstExcursion = false;
   double elb = 0.0;
   double Ksft = 0.0;
   double alphaFulb = 0.0;
@@ -139,17 +144,17 @@ OPS_Export void *OPS_shenSteel01() {
     return 0;
   }
 
-  numData = 13;
+  numData = 14;
   if (OPS_GetDoubleInput(&numData, dData) != 0) {
-    opserr << "WARNING invalid input, want: uniaxialMaterial shenSteel01 tag Fy Fu Es kappaBar0 Ep0i alpha a b c omega zeta e f <options> \n";
+    opserr << "WARNING invalid input, want: uniaxialMaterial shenSteel01 tag Es Fy Fu eu kappaBar0 Ep0i alpha a b c omega zeta e f <options> \n";
     return 0;
   }
 
-  Fy = dData[0];  Fu = dData[1];  Es = dData[2];
-  kappaBar0 = dData[3];  Ep0i = dData[4];
-  alpha = dData[5];  a = dData[6];  b = dData[7];  c= dData[8];
-  omega = dData[9];  zeta = dData[10];
-  e = dData[11]; f = dData[12];
+  Es = dData[0];  Fy = dData[1];  Fu = dData[2];  eu = dData[3];
+  kappaBar0 = dData[4];  Ep0i = dData[5];
+  alpha = dData[6];  a = dData[7];  b = dData[8];  c= dData[9];
+  omega = dData[10];  zeta = dData[11];
+  e = dData[12]; f = dData[13];
 
   // Check the data
   if ( Fy <= 0 ) {
@@ -164,6 +169,10 @@ OPS_Export void *OPS_shenSteel01() {
     opserr << "WARNING Es should be a positive value\n";
     return 0;
   }
+  if ( eu < Fy/Es ) {
+    opserr << "WARNING eu less than ey = Fy/Es \n";
+    return 0;
+  }
 
   // Loop through remaining arguments
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
@@ -172,14 +181,35 @@ OPS_Export void *OPS_shenSteel01() {
       return 0;
     }
 
-    if ( strcmp(sData,"-yieldPlateau") == 0 ) {
+    if ( strcmp(sData,"-hotRolled") == 0 ) {
       numData = 3;
       if (OPS_GetDoubleInput(&numData, dData) != 0) {
-        opserr << "WARNING invalid input, want: -yieldPlateau $epst $Epst $M \n";
+        opserr << "WARNING invalid input, want: -hotRolled $epst $M $Epst \n";
         return 0;
       }
-      epst = dData[0];  Epst = dData[1];  M = dData[2];
+      epst = dData[0];  M = dData[1];  Epst = dData[2];
       modelYieldPlateau = true;
+      modelFirstExcursion = true;
+
+    } else if ( strcmp(sData,"-coldFormed") == 0 ) {
+      numData = 2;
+      if (OPS_GetDoubleInput(&numData, dData) != 0) {
+        opserr << "WARNING invalid input, want: -coldFormed $ep0 $Epst \n";
+        return 0;
+      }
+      ep0 = dData[0]; Epst = dData[1];
+      modelYieldPlateau = false;
+      modelFirstExcursion = true;
+
+    } else if ( strcmp(sData,"-coldFormed2") == 0 ) {
+      numData = 1;
+      if (OPS_GetDoubleInput(&numData, dData) != 0) {
+        opserr << "WARNING invalid input, want: -coldFormed2 $ep0 \n";
+        return 0;
+      }
+      ep0 = dData[0];
+      modelYieldPlateau = false;
+      modelFirstExcursion = false;
 
     } else if ( strcmp(sData,"-initialStress") == 0 ) {
       numData = 1;
@@ -200,14 +230,6 @@ OPS_Export void *OPS_shenSteel01() {
         return 0;
       }
       alphaLat = dData[0];
-
-    } else if ( strcmp(sData,"-initialPlasticStrain") == 0 ) {
-      numData = 1;
-      if (OPS_GetDoubleInput(&numData, dData) != 0) {
-        opserr << "WARNING invalid input, want: -initialPlasticStrain $ep0 \n";
-        return 0;
-      }
-      ep0 = dData[0];
 
     } else if ( strcmp(sData,"-localBuckling") == 0 ) {
       numData = 3;
@@ -274,10 +296,10 @@ OPS_Export void *OPS_shenSteel01() {
     }
   }
 
-  theMaterial = new shenSteel01(tag, Fy, Fu, Es,
+  theMaterial = new shenSteel01(tag, Fy, Fu, Es, eu,
       kappaBar0, Ep0i, alpha, a, b, c, omega, zeta, e, f,
       modelYieldPlateau, M, Epst, epst,
-      sigma0, alphaLat, ep0,
+      modelFirstExcursion, sigma0, alphaLat, ep0,
       modelLocalBuckling, elb, Ksft, alphaFulb, refFulb,
       modelDegradeEp, degradeEpRate, degradeEpLimit,
       modelDegradeKappa, degradeKappaRate, degradeKappaLimit,
@@ -292,19 +314,19 @@ OPS_Export void *OPS_shenSteel01() {
 }
 
 
-shenSteel01::shenSteel01(int tag, double iA1, double iA2, double iA3,
+shenSteel01::shenSteel01(int tag, double iA1, double iA2, double iA3, double iA4,
     double iB1, double iB2, double iB3, double iB4, double iB5, double iB6, double iB7, double iB8, double iB9, double iB10,
     bool iC1, double iC2, double iC3, double iC4,
-    double iD1, double iD2, double iD3,
+    bool iD1, double iD2, double iD3, double iD4,
     bool iE1, double iE2, double iE3, double iE4, int iE5,
     bool iF1, double iF2, double iF3,
     bool iG1, double iG2, double iG3,
     bool iH1, double iH2, double iH3)
 :UniaxialMaterial(tag,MAT_TAG_shenSteel01),
- fy(iA1), fu(iA2), Ee(iA3),
+ fy(iA1), fu(iA2), Ee(iA3), eu(iA4),
  Rbso(iB1), Epoi(iB2), alfa(iB3), a(iB4), bb(iB5), c(iB6), w(iB7), ksi(iB8), e(iB9), fE(iB10),
  modelYieldPlateau(iC1), M(iC2), Est(iC3), est(iC4),
- initStress(iD1), alphaLat(iD2), ep0(iD3),
+ modelFirstExcursion(iD1), initStress(iD2), alphaLat(iD3), ep0(iD4),
  modelLocalBuckling(iE1), localBucklingStrain(iE2), Ksft(iE3), alphaFulb(iE4), refFulb(iE5),
  modelDegradeEp(iF1), degradeEpRate(iF2), degradeEpLimit(iF3),
  modelDegradeKappa(iG1), degradeKappaRate(iG2), degradeKappaLimit(iG3),
@@ -411,10 +433,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     break;
   }
 
-  // Initialize Variables
-  double delta, h, Ep, Epo;
-  Epo = Epoi / ( 1 + w * W ); // Slope of the Bounding Surface
-
   // Check for unloading from tensile plasticity and update appropriate variables
   if ( commitedPlasticityStatus == 1 && plasticityStatus != 1 ){
     // Local Buckling Stuff
@@ -437,11 +455,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     if ( delta_yForC <= 0.0) {
       delta_yForC = 0.0;
     }
-
-    // Yield Plateau
-    if ( commitedYieldPlateauStatus == 2) {
-      yieldPlateauStatus = 0;
-    }
   }
 
   // Check for unloading from compressive plasticity and update appropriate variables
@@ -451,14 +464,12 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     if ( delta_yForT <= 0.0) {
       delta_yForT = 0.0;
     }
-
-    // Yield Plateau
-    if ( commitedYieldPlateauStatus == 2) {
-      yieldPlateauStatus = 0;
-    }
   }
 
+
   // Set trial stress and tangent according to the plasticity model
+  Epo = Epoi / ( 1 + w * W );
+
   switch ( plasticityStatus ) {
   case 0 :
     // Elastic - stress point is within loading surfaces
@@ -468,198 +479,174 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
 
   case 1 :
     // Moving in the tensile or positive direction
+    if ( firstExcursionStatus == 1 && lastYieldedIn == 2 ) {
+      firstExcursionStatus = 0;
+    }
     lastYieldedIn = 1;
 
-    if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && committedStress >= fy ) {
-      // In the yield plateau and can skip the plasticity formulation
-      trialStress = committedStress;
-    } else {
-      // Compute the stress and tangent
-      if ( commitedPlasticityStatus != 1 ) {
-        // If immediately after elastic loading then compute delta_in
-        if ( lastYieldedIn != commitedLastYieldedIn ) {
-          delta_in = fabs( Epo * ep + Tbs_p - Tls_p);
-        }
+//    opserr << "At The Start     ";
+//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
 
-        delta = delta_in;
-        h = e * delta + fE;
-        if ( committedStress < Epo * ep + Cmax_strs ) {
-          // Within the memory surface
-          Ep = Epo + h * ( delta + delta_yForT ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
-        } else {
-          // Outside the memory surface
-          Ep = Epo + h * ( delta ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
-        }
-        if( modelDegradeEp == true && localBucklingHistory != 0 ) {
-          double reduction = ( 1.0 - degradeEpRate * sqrt ( W / fy ) );  // @todo - maybe have (W-refW)
-          if ( reduction < degradeEpLimit ) reduction = degradeEpLimit;
-          Ep = Ep * reduction;
-        }
-        trialTangent = Ee * Ep / ( Ee + Ep );
 
-        // Correct the overshooting of the yield surface
-        trialStress = Tls_p + ( strainIncrement - (Tls_p-committedStress)/Ee ) * trialTangent;
-
-        // Make sure that the loading point does not breach the bounding surface
-        if ( trialStress > Epo * ep + Tbs_p ) {
-          trialStress = Epo * ep + Tbs_p;
-          trialTangent =  Epo;
-        }
-      } else {
-        // If continued plastic loading
-        delta = fabs( Epo * ep + Tbs_p - committedStress);
-        h = e * delta + fE;
-        if ( committedStress < Epo * ep + Cmax_strs ) {
-          // Within the memory surface
-          Ep = Epo + h * ( delta + delta_yForT ) / ( delta_in - delta );
-        } else {
-          // Outside the memory surface
-          Ep = Epo + h * ( delta ) / ( delta_in - delta );
-        }
-        if( modelDegradeEp == true && localBucklingHistory != 0 ) {
-          double reduction = ( 1.0 - degradeEpRate * sqrt ( W / fy ) ); // @todo - maybe have (W-refW)
-          if ( reduction < degradeEpLimit ) reduction = degradeEpLimit;
-          Ep = Ep * reduction;
-        }
-        trialTangent = Ee * Ep / ( Ee + Ep );
-
-        trialStress = committedStress + strainIncrement * trialTangent;
-
-        // Make sure that the loading point does not breach the bounding surface
-        if ( trialStress > Epo * ep + Tbs_p ) {
-          trialStress = Epo * ep + Tbs_p;
-          trialTangent =  Epo;
-        }
+    // Compute the stress and tangent based on the plasticity formulation
+    if ( commitedPlasticityStatus != 1 ) {
+      // If immediately after elastic loading then compute delta_in
+      if ( lastYieldedIn != commitedLastYieldedIn ) {
+        delta_in = fabs( Epo * ep + Tbs_p - Tls_p);
       }
+      double plasticStrainIncrement;
+      plasticStrainIncrement = strainIncrement - (Tls_p-committedStress)/Ee;
+      plasticityModel(plasticStrainIncrement, Tls_p, Ee, trialStress, trialTangent);
+    } else {
+      plasticityModel(strainIncrement, committedStress, committedTangent, trialStress, trialTangent);
     }
 
+
+//    opserr << "After Plasticity ";
+//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
+
+    // Yield Plateau
     if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && trialStress >= fy ) {
       if ( commitedPlasticityStatus == 0 ) {
         delta_in = fabs( Epo * ep + Tbs_p - fy);
       }
 
-      if ( commitedYieldPlateauStatus == 1) {
-        // Assess if the yield plateau will still be active at the end of the step
-        double epIfPlateau, epMaxIfPlateau, epBarIfPlateau, WIfPlateau, plateauTest;
-        epIfPlateau = trialStrain - fy/Ee;
-        if( epIfPlateau > epmax ) {
-          epMaxIfPlateau = epIfPlateau;
-        } else {
-          epMaxIfPlateau = epmax;
-        }
-        epBarIfPlateau = epMaxIfPlateau - epmin;
-        WIfPlateau = W + (epIfPlateau-Cep)*fy;
-        plateauTest = ( epBarIfPlateau/est -1 ) - M * ( WIfPlateau/est/fy -1);
+      // Assess if the yield plateau will still be active at the end of the step
+      double epIfPlateau, epMaxIfPlateau, epBarIfPlateau, WIfPlateau, plateauTest;
+      epIfPlateau = trialStrain - fy/Ee;
+      if( epIfPlateau > epmax ) {
+        epMaxIfPlateau = epIfPlateau;
+      } else {
+        epMaxIfPlateau = epmax;
+      }
+      epBarIfPlateau = epMaxIfPlateau - epmin;
+      WIfPlateau = W + (epIfPlateau-Cep)*fy;
+      plateauTest = ( epBarIfPlateau/est -1 ) - M * ( WIfPlateau/est/fy -1);
 
 
-        if ( plateauTest < 0 ) {
-          yieldPlateauStatus = 1;
-          trialStress = fy;
-          trialTangent = 0;
-        } else {
-          // If yield plateau vanishes, then set appropriate values
-          yieldPlateauStatus = 2;
-          double strainIncrementInPlaeau;
-          strainIncrementInPlaeau = 0.5*strainIncrement;
-          trialStress = fy + (strainIncrement-strainIncrementInPlaeau)*Est;
-          trialTangent = Est;
-        }
-      } else { //commitedYieldPlateauStatus == 2
-        trialStress = committedStress + strainIncrement*Est;
+      if ( plateauTest < 0 ) {
+        // Yield plateau continues
+        yieldPlateauStatus = 1;
+        trialStress = fy;
+        trialTangent = 0.0;
+      } else {
+        // If yield plateau vanishes, then set appropriate values
+        yieldPlateauStatus = 0;
+        double strainIncrementInPlaeau;
+        strainIncrementInPlaeau = 0.5*strainIncrement;
+        esh = trialStrain-strainIncrementInPlaeau;
+        trialStress = fy + (strainIncrement-strainIncrementInPlaeau)*Est;
         trialTangent = Est;
+        firstExcursionStress = fy;
       }
     }
+
+//    opserr << "After Yield Plat ";
+//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
+
+    // First Excursion
+    if ( modelFirstExcursion == true && commitedFirstExcursionStatus != 0 && trialStress > fy && trialStress >= firstExcursionStress ) {
+      if ( esh == 0.0 ) {
+        esh = committedStrain;
+      }
+      // Stress-Strain Relationship for First Excursion
+      if (trialStrain < eu) {
+        double p = Est*((eu-esh)/(fu-fy));
+        trialStress = fu + (fy-fu)*pow((eu-trialStrain)/(eu-esh),p);
+        trialTangent = Est*pow((fu-trialStress)/(fu-fy),1-1/p);
+      } else {
+        trialStress = fu;
+        trialTangent = 0.0;
+      }
+
+      // Update First Excursion Stress
+      firstExcursionStress = trialStress;
+    }
+
+//    opserr << "After First Excu ";
+//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n\n";
+
     break;
 
   case 2 :
     // Moving in the compressive or negative direction
+    if ( firstExcursionStatus == 1 && lastYieldedIn == 1 ) {
+      firstExcursionStatus = 0;
+    }
     lastYieldedIn = 2;
 
-    if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && committedStress <= -fy ) {
-      // In the yield plateau and can skip the plasticity formulation
-      trialStress = committedStress;
-    } else {
-      // Compute the stress and tangent
-      if ( commitedPlasticityStatus != 2 ) {
-        // If immediately after elastic loading then compute delta_in
-        if ( lastYieldedIn != commitedLastYieldedIn ) {
-          delta_in = fabs( Epo * ep + Tbs_n - Tls_n);
-        }
-        delta = delta_in;
-        h = e * delta + fE;
-        if ( committedStress > Epo * ep - Cmax_strs ) {
-          // Within the memory surface
-          Ep = Epo + h * ( delta + delta_yForC ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
-        } else {
-          // Outside the memory surface
-          Ep = Epo + h * ( delta ) / 1e-15; // @todo - better idea for (delta_in-delta) than 0.0000001
-        }
-        trialTangent = Ee * Ep / ( Ee + Ep );
-        // Correct the overshooting of the yield surface
-        trialStress = Tls_n + ( strainIncrement - (Tls_n-committedStress) / Ee ) * trialTangent;
-        // Make sure that the loading point does not breach the bounding surface
-        if ( trialStress <= Epo * ep + Tbs_n ) {
-          trialStress = Epo * ep + Tbs_n;
-          trialTangent = Epo;
-        }
-      } else {
-        // If continued plastic loading
-        delta = fabs( Epo * ep + Tbs_n - committedStress);
-        h = e * delta + fE;
-        if ( committedStress > Epo * ep - Cmax_strs ) {
-          // Within the memory surface
-          Ep = Epo + h * ( delta + delta_yForC ) / ( delta_in - delta );
-        } else {
-          // Outside the memory surface
-          Ep = Epo + h * ( delta ) / ( delta_in - delta );
-        }
-        trialTangent = Ee * Ep / ( Ee + Ep );
-        trialStress = committedStress + strainIncrement * trialTangent;
 
-        // Make sure that the loading point does not breach the bounding surface
-        if ( trialStress <= Epo * ep + Tbs_n ) {
-          trialStress = Epo * ep + Tbs_n;
-          trialTangent = Epo;
-        }
+    // Compute the stress and tangent based on the plasticity formulation
+    if ( commitedPlasticityStatus != 2 ) {
+      // If immediately after elastic loading then compute delta_in
+      if ( lastYieldedIn != commitedLastYieldedIn ) {
+        delta_in = fabs( Epo * ep + Tbs_n - Tls_n);
       }
+      double plasticStrainIncrement;
+      plasticStrainIncrement = strainIncrement - (Tls_n-committedStress)/Ee;
+      plasticityModel(plasticStrainIncrement, Tls_n, Ee, trialStress, trialTangent);
+    } else {
+      plasticityModel(strainIncrement, committedStress, committedTangent, trialStress, trialTangent);
     }
 
+
+    // Yield Plateau
     if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && trialStress <= -fy ) {
       if ( commitedPlasticityStatus == 0 ) {
         delta_in = fabs( Epo * ep + Tbs_n - (-fy));
       }
 
-      if ( commitedYieldPlateauStatus == 1 ) {
-        // Assess if the yield plateau will still be active at the end of the step
-        double epIfPlateau, epMinIfPlateau, epBarIfPlateau, WIfPlateau, plateauTest;
-        epIfPlateau = trialStrain + fy/Ee;
-        if( epIfPlateau > epmin ) {
-          epMinIfPlateau = epIfPlateau;
-        } else {
-          epMinIfPlateau = epmin;
-        }
-        epBarIfPlateau = epmax - epMinIfPlateau;
-        WIfPlateau = W + (epIfPlateau-Cep)*(-fy);
-        plateauTest = ( epBarIfPlateau/est -1 ) - M * ( WIfPlateau/est/fy -1);
+      // Assess if the yield plateau will still be active at the end of the step
+      double epIfPlateau, epMinIfPlateau, epBarIfPlateau, WIfPlateau, plateauTest;
+      epIfPlateau = trialStrain + fy/Ee;
+      if( epIfPlateau > epmin ) {
+        epMinIfPlateau = epIfPlateau;
+      } else {
+        epMinIfPlateau = epmin;
+      }
+      epBarIfPlateau = epmax - epMinIfPlateau;
+      WIfPlateau = W + (epIfPlateau-Cep)*(-fy);
+      plateauTest = ( epBarIfPlateau/est -1 ) - M * ( WIfPlateau/est/fy -1);
 
 
-        if ( plateauTest < 0 ) {
-          yieldPlateauStatus = 1;
-          trialStress = -fy;
-          trialTangent = 0;
-        } else {
-          // If yield plateau vanishes, then set appropriate values
-          yieldPlateauStatus = 2;
-          double strainIncrementInPlaeau;
-          strainIncrementInPlaeau = 0.5*strainIncrement; //est - (Cep + M*CW/fy)/(1-M);
-          trialStress = -fy + (strainIncrement-strainIncrementInPlaeau)*Est;
-          trialTangent = Est;
-        }
-      } else { //commitedYieldPlateauStatus == 2
-        trialStress = committedStress + strainIncrement*Est;
+      if ( plateauTest < 0 ) {
+        // Yield plateau continues
+        yieldPlateauStatus = 1;
+        trialStress = -fy;
+        trialTangent = 0;
+      } else {
+        // If yield plateau vanishes, then set appropriate values
+        yieldPlateauStatus = 0;
+        double strainIncrementInPlaeau;
+        strainIncrementInPlaeau = 0.5*strainIncrement; //est - (Cep + M*CW/fy)/(1-M);
+        esh = trialStrain-strainIncrementInPlaeau;
+        trialStress = -fy + (strainIncrement-strainIncrementInPlaeau)*Est;
         trialTangent = Est;
+        firstExcursionStress = -fy;
       }
     }
+
+    // First Excursion
+    if ( modelFirstExcursion == true && commitedFirstExcursionStatus != 0 && trialStress < -fy && trialStress <= firstExcursionStress ) {
+      if ( esh == 0.0 ) {
+        esh = committedStrain;
+      }
+
+      // Stress-Strain Relationship for First Excursion
+      if (trialStrain > -eu) {
+        double p = Est*((eu+esh)/(fu-fy));
+        trialStress = -fu - (fy-fu)*pow((-eu-trialStrain)/(-eu-esh),p);
+        trialTangent = Est*pow((fu+trialStress)/(fu-fy),1-1/p);
+      } else {
+        trialStress = -fu;
+        trialTangent = 0.0;
+      }
+
+      // Update First Excursion Stress
+      firstExcursionStress = trialStress;
+
+    }
+
     break;
 
   default :
@@ -675,7 +662,11 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     if ( commitedLocalBucklingHistory == 0 ) {
       // Detect first local buckling using a strain measure (but stress must also be lower than a certain amount)
       double stressForLocalBuckling;
-      stressForLocalBuckling = -1*alphaFulb*max(localBucklingStrain*Ee,-fy);
+      if ( -localBucklingStrain*Ee < fy ) {
+        stressForLocalBuckling = -1*alphaFulb*localBucklingStrain*Ee;
+      } else {
+        stressForLocalBuckling = alphaFulb*fy;
+      }
 
       if ( trialStrain <= (localBucklingStrain+localBucklingReferenceStrain) && trialStress <= stressForLocalBuckling ) {
         // Local buckling has initiated
@@ -821,7 +812,10 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     ebar_p = ep0;
   }
   dep = ep - Cep;
-  W = W + fmax(trialStress*dep,0);
+  if (trialStress*dep > 0) {
+    W = W + trialStress*dep;
+  }
+
   if ( modelLocalBuckling && localBucklingHistory == 2 && commitedLocalBucklingHistory != 2)
     localBucklingReferenceWork = W;
 
@@ -867,6 +861,87 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
   return 0;
 }
 
+
+void shenSteel01::plasticityModel(double strainIncrement, double initialStress, double initialTangent, double &finalStress, double &finalTangent)
+{
+  // Initialize Variables
+  double delta, h, Ep;
+
+  if ( strainIncrement == 0.0 ) {
+    // No Strain Increment
+    finalStress = initialStress;
+    finalTangent = initialTangent;
+    return;
+
+  } else if ( strainIncrement < 0.0) {
+    // Compressive Strain Increment
+
+    delta = fabs( Epo * ep + Tbs_n - initialStress);
+    h = e * delta + fE;
+    if ( initialStress > Epo * ep - Cmax_strs ) {
+      // Within the memory surface
+      if ( delta_in-delta <= DBL_EPSILON ) {
+        Ep = Epo + h * ( delta + delta_yForC ) / 1e-15;
+      } else {
+        Ep = Epo + h * ( delta + delta_yForC ) / ( delta_in - delta );
+      }
+    } else {
+      // Outside the memory surface
+      if ( delta_in-delta <= DBL_EPSILON ) {
+        Ep = Epo + h * ( delta ) / 1e-15;
+      } else {
+        Ep = Epo + h * ( delta ) / ( delta_in - delta );
+      }
+    }
+
+
+  } else {
+    // Tensile Strain Increment
+
+    delta = fabs( Epo * ep + Tbs_p - initialStress);
+    h = e * delta + fE;
+    if ( initialStress < Epo * ep + Cmax_strs ) {
+      // Within the memory surface
+      if ( delta_in-delta <= DBL_EPSILON ) {
+        Ep = Epo + h * ( delta + delta_yForT ) / 1e-15;
+      } else {
+        Ep = Epo + h * ( delta + delta_yForT ) / ( delta_in - delta );
+      }
+    } else {
+      // Outside the memory surface
+      if ( delta_in-delta <= DBL_EPSILON ) {
+        Ep = Epo + h * ( delta ) / 1e-15;
+      } else {
+        Ep = Epo + h * ( delta ) / ( delta_in - delta );
+      }
+    }
+
+    // Local Buckling Effects
+    if( modelDegradeEp == true && localBucklingHistory != 0 ) {
+      double reduction = ( 1.0 - degradeEpRate * sqrt ( W / fy ) ); // @todo - maybe have (W-refW)
+      if ( reduction < degradeEpLimit ) reduction = degradeEpLimit;
+      Ep = Ep * reduction;
+    }
+  }
+
+  if (Ep < 0)
+    Ep = 0;
+
+  finalTangent = Ee * Ep / ( Ee + Ep );
+  finalStress = initialStress + strainIncrement * finalTangent;
+
+  // Make sure that the loading point does not breach the bounding surface
+//  if ( finalStress >= Epo * ep + Tbs_p ) {
+//    finalStress = Epo * ep + Tbs_p;
+//    finalTangent =  Epo;
+//  } else if ( finalStress <= Epo * ep + Tbs_n ) {
+//    finalStress = Epo * ep + Tbs_n;
+//    finalTangent = Epo;
+//  }
+
+  return;
+}
+
 double shenSteel01::getStrain(void) {
   if (initStress == 0.0) {
     return trialStrain;
@@ -896,6 +971,7 @@ int shenSteel01::commitState(void) {
   // Flags to determine the general state of the material
   commitedPlasticityStatus = plasticityStatus;
   commitedYieldPlateauStatus = yieldPlateauStatus;
+  commitedFirstExcursionStatus = firstExcursionStatus;
   commitedLocalBucklingStatus = localBucklingStatus;
   commitedLocalBucklingHistory = localBucklingHistory;
   committedLoadingDirection = loadingDirection;
@@ -932,6 +1008,9 @@ int shenSteel01::commitState(void) {
   committedLocalBucklingConstantResidualStress = localBucklingConstantResidualStress;
   committedLocalBucklingBoundingStress = localBucklingBoundingStress;
 
+  Cesh = esh;
+  commitedFirstExcursionStress = firstExcursionStress;
+
   return 0;
 }
 
@@ -945,6 +1024,7 @@ int shenSteel01::revertToLastCommit(void) {
   // Flags to determine the general state of the material
   plasticityStatus = commitedPlasticityStatus;
   yieldPlateauStatus = commitedYieldPlateauStatus;
+  firstExcursionStatus = commitedFirstExcursionStatus;
   localBucklingStatus = commitedLocalBucklingStatus;
   localBucklingHistory = commitedLocalBucklingHistory;
   loadingDirection = committedLoadingDirection;
@@ -981,6 +1061,15 @@ int shenSteel01::revertToLastCommit(void) {
   localBucklingConstantResidualStress = committedLocalBucklingConstantResidualStress;
   localBucklingBoundingStress = committedLocalBucklingBoundingStress;
 
+  esh = Cesh;
+  firstExcursionStress = commitedFirstExcursionStress;
+
+  // Open file for debugging if needed
+//  ofstream shenSteel01debug;
+//  shenSteel01debug.open("shenSteel01debug.dat2",ios::app);
+//  shenSteel01debug << Tls_p << " " << Tls_n << " " << Tbs_p << " " << Tbs_n << " " << W << " " << Epoi / ( 1 + w * W ) << "\n";
+//  shenSteel01debug.close();
+
   return 0;
 }
 
@@ -998,6 +1087,7 @@ int shenSteel01::revertToStart(void) {
   } else {
     yieldPlateauStatus = 1;
   }
+  firstExcursionStatus = 1;
   localBucklingStatus = 0;
   localBucklingHistory = 0;
   loadingDirection = 0;
@@ -1036,6 +1126,9 @@ int shenSteel01::revertToStart(void) {
   localBucklingReferenceWork = 0.0;
   localBucklingBoundingStress = -fy;
 
+  esh = 0.0;
+  firstExcursionStress = 0.0;
+
   this->commitState();
 
   return 0;
@@ -1049,6 +1142,7 @@ UniaxialMaterial * shenSteel01::getCopy(void) {
   theCopy-> fy = fy;
   theCopy-> fu = fu;
   theCopy-> Ee = Ee;
+  theCopy-> eu = eu;
   theCopy-> Rbso = Rbso;
   theCopy-> Epoi = Epoi;
   theCopy-> alfa = alfa;
@@ -1063,6 +1157,7 @@ UniaxialMaterial * shenSteel01::getCopy(void) {
   theCopy-> M = M;
   theCopy-> Est = Est;
   theCopy-> est = est;
+  theCopy-> modelFirstExcursion = modelFirstExcursion;
   theCopy-> initStress = initStress;
   theCopy-> alphaLat = alphaLat;
   theCopy-> ep0 = ep0;
@@ -1097,6 +1192,8 @@ UniaxialMaterial * shenSteel01::getCopy(void) {
   theCopy-> commitedPlasticityStatus = commitedPlasticityStatus;
   theCopy-> yieldPlateauStatus = yieldPlateauStatus;
   theCopy-> commitedYieldPlateauStatus = commitedYieldPlateauStatus;
+  theCopy-> firstExcursionStatus = firstExcursionStatus;
+  theCopy-> commitedFirstExcursionStatus = commitedFirstExcursionStatus;
   theCopy-> localBucklingStatus = localBucklingStatus;
   theCopy-> commitedLocalBucklingStatus = commitedLocalBucklingStatus;
   theCopy-> localBucklingHistory = localBucklingHistory;
@@ -1160,6 +1257,12 @@ UniaxialMaterial * shenSteel01::getCopy(void) {
   theCopy-> localBucklingBoundingStress = localBucklingBoundingStress;
   theCopy-> committedLocalBucklingBoundingStress = committedLocalBucklingBoundingStress;
 
+
+  theCopy-> esh = esh;
+  theCopy-> Cesh = Cesh;
+  theCopy-> firstExcursionStress = firstExcursionStress;
+  theCopy-> commitedFirstExcursionStress = commitedFirstExcursionStress;
+
   return theCopy;
 }
 
@@ -1180,6 +1283,7 @@ void shenSteel01::Print(OPS_Stream &s, int flag) {
   s<<" Fy:      "<<fy<<endln;
   s<<" Fu:      "<<fu<<endln;
   s<<" Es:      "<<Ee<<endln;
+  s<<" eu:      "<<eu<<endln;
   s<<" kappaBar0: "<<Rbso<<" Ep0i: "<<Epoi<<" alpha: "<<alfa<<" a: "<<a<<" b: "<<bb<<" c: "<<c<<" omega: "<<w<<" zeta: "<<ksi<<" e: "<<e<<" f: "<<fE<< endln;
   s<<" modelYieldPlateau: "<<modelYieldPlateau<<" M: "<<M<<" Epst: "<<Est<<" epst: "<<est<< endln;
   s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<< endln;
