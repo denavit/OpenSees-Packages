@@ -91,7 +91,7 @@ Matrix *mixedBeamColumn3d::nd2T = 0;
 
 
 OPS_Export void localInit() {
-  OPS_Error("mixedBeamColumn3d element \nWritten by Mark D. Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
+  OPS_Error("mixedBeamColumn3d element \nWritten by Mark D. Denavit, University of Illinois at Urbana-Champaign\n", 1);
 }
 
 // Documentation: Three Dimensional Mixed Beam Column Element
@@ -1331,7 +1331,7 @@ Response* mixedBeamColumn3d::setResponse(const char **argv, int argc,
   Response *theResponse = 0;
 
   output.tag("ElementOutput");
-  output.attr("eleType","ForceBeamColumn3d");
+  output.attr("eleType","mixedBeamColumn3d");
   output.attr("eleTag",this->getTag());
   output.attr("node1",connectedExternalNodes[0]);
   output.attr("node2",connectedExternalNodes[1]);
