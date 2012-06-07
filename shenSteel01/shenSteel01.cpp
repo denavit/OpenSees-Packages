@@ -484,10 +484,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     }
     lastYieldedIn = 1;
 
-//    opserr << "At The Start     ";
-//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
-
-
     // Compute the stress and tangent based on the plasticity formulation
     if ( commitedPlasticityStatus != 1 ) {
       // If immediately after elastic loading then compute delta_in
@@ -500,10 +496,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     } else {
       plasticityModel(strainIncrement, committedStress, committedTangent, trialStress, trialTangent);
     }
-
-
-//    opserr << "After Plasticity ";
-//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
 
     // Yield Plateau
     if ( modelYieldPlateau == true && commitedYieldPlateauStatus != 0 && trialStress >= fy ) {
@@ -541,9 +533,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
       }
     }
 
-//    opserr << "After Yield Plat ";
-//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n";
-
     // First Excursion
     if ( modelFirstExcursion == true && commitedFirstExcursionStatus != 0 && trialStress > fy && trialStress >= firstExcursionStress ) {
       if ( esh == 0.0 ) {
@@ -552,8 +541,21 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
       // Stress-Strain Relationship for First Excursion
       if (trialStrain < eu) {
         double p = Est*((eu-esh)/(fu-fy));
-        trialStress = fu + (fy-fu)*pow((eu-trialStrain)/(eu-esh),p);
-        trialTangent = Est*pow((fu-trialStress)/(fu-fy),1-1/p);
+        if (p > 2.0) {
+          trialStress  = fu + (fy-fu)*pow((eu-trialStrain)/(eu-esh),p);
+          trialTangent = Est*pow((eu-trialStrain)/(eu-esh),p-1);
+        } else {
+          double fsh2 = 0.5*(fy+fu);
+          double esh2 = esh + (fsh2-fy)/Est;
+          if (trialStrain < esh2) {
+            trialStress  = fy + Est*(trialStrain-esh);
+            trialTangent = Est;
+          } else {
+            double Est2 = (fu-fsh2)/(eu-esh2);
+            trialStress  = fsh2 + Est2*(trialStrain-esh2);
+            trialTangent = Est2;
+          }
+        }
       } else {
         trialStress = fu;
         trialTangent = 0.0;
@@ -562,9 +564,6 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
       // Update First Excursion Stress
       firstExcursionStress = trialStress;
     }
-
-//    opserr << "After First Excu ";
-//    opserr << "Trial Stress: " << trialStress << " Tangent: " << trialTangent << "\n\n";
 
     break;
 
@@ -635,8 +634,21 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
       // Stress-Strain Relationship for First Excursion
       if (trialStrain > -eu) {
         double p = Est*((eu+esh)/(fu-fy));
-        trialStress = -fu - (fy-fu)*pow((-eu-trialStrain)/(-eu-esh),p);
-        trialTangent = Est*pow((fu+trialStress)/(fu-fy),1-1/p);
+        if (p > 2.0) {
+          trialStress  = -fu - (fy-fu)*pow((-eu-trialStrain)/(-eu-esh),p);
+          trialTangent = Est*pow((-eu-trialStrain)/(-eu-esh),p-1);
+        } else {
+          double fsh2 = -0.5*(fy+fu);
+          double esh2 = esh + (fsh2+fy)/Est;
+          if (trialStrain > esh2) {
+            trialStress  = -fy + Est*(trialStrain-esh);
+            trialTangent = Est;
+          } else {
+            double Est2 = (-fu-fsh2)/(-eu-esh2);
+            trialStress  = fsh2 + Est2*(trialStrain-esh2);
+            trialTangent = Est2;
+          }
+        }
       } else {
         trialStress = -fu;
         trialTangent = 0.0;
@@ -662,10 +674,17 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
     if ( commitedLocalBucklingHistory == 0 ) {
       // Detect first local buckling using a strain measure (but stress must also be lower than a certain amount)
       double stressForLocalBuckling;
-      if ( -localBucklingStrain*Ee < fy ) {
-        stressForLocalBuckling = -1*alphaFulb*localBucklingStrain*Ee;
+      if ( refFulb == 1 ) {
+        stressForLocalBuckling = alphaFulb*(-fy);
+      } else if ( refFulb == 2 ) {
+        double scratch;
+        scratch = localBucklingStrain*Ee;
+        if ( scratch < -fy )
+          scratch = -fy;
+        stressForLocalBuckling = alphaFulb*scratch;
       } else {
-        stressForLocalBuckling = alphaFulb*fy;
+        opserr << "shenSteel01::setTrialStrain unknown refFulb: "<<refFulb<<"\n";
+        return -1;
       }
 
       if ( trialStrain <= (localBucklingStrain+localBucklingReferenceStrain) && trialStress <= stressForLocalBuckling ) {
@@ -689,7 +708,14 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
           }
 
           // compute the constant local buckling residual stress
-          localBucklingBaseConstantResidualStress = alphaFulb*stressAtLocalBuckling;
+          if ( refFulb == 1 ) {
+            localBucklingBaseConstantResidualStress = alphaFulb*(-fy);
+          } else if ( refFulb == 2 ) {
+            localBucklingBaseConstantResidualStress = alphaFulb*stressAtLocalBuckling;
+          } else {
+            opserr << "shenSteel01::setTrialStrain unknown refFulb: "<<refFulb<<"\n";
+            return -1;
+          }
           localBucklingConstantResidualStress = localBucklingBaseConstantResidualStress;
 
           // strain at which constant residual stress begins
@@ -709,11 +735,23 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
       switch ( commitedLocalBucklingStatus ) {
       case 0 :
         // Detect subsequent local buckling using a stress measure
-        if ( trialStress < localBucklingBoundingStress ) {
+
+        double localBucklingStressLimit;
+        double localBucklingBoundingStrain;
+        localBucklingBoundingStrain = localBucklingConstantResidualStrain + (localBucklingBoundingStress-localBucklingConstantResidualStress)/Ksft;
+        if ( trialStrain >= localBucklingBoundingStrain ) {
+          localBucklingStressLimit = localBucklingBoundingStress;
+        } else if ( trialStrain >= localBucklingConstantResidualStrain ) {
+          localBucklingStressLimit = localBucklingConstantResidualStress - Ksft*(localBucklingConstantResidualStrain-trialStrain);
+        } else {
+          localBucklingStressLimit = localBucklingConstantResidualStress;
+        }
+
+        if ( trialStress < localBucklingStressLimit ) {
           switch ( commitedLocalBucklingHistory ) {
           case 1:
             // strain at which constant residual stress begins
-            {
+            if ( trialStrain >= localBucklingBoundingStrain ) {
             double strainAtStartOfLB = committedStrain + (localBucklingBoundingStress-committedStress)/trialTangent;
             localBucklingConstantResidualStrain = strainAtStartOfLB - (localBucklingBoundingStress-localBucklingConstantResidualStress)/Ksft;
             }
@@ -823,7 +861,7 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
   double rho = 0.5*ebar_p;
   Tbs_p =   ( fu + ( Rbso - fu ) * exp ( -ksi*rho*rho ) );
   Tbs_n = - ( fu + ( Rbso - fu ) * exp ( -ksi*rho*rho ) );
-  if ( modelLocalBuckling && localBucklingHistory != 0 && Tbs_n > localBucklingBoundingStress ) {
+  if ( modelLocalBuckling && localBucklingHistory != 0 && Tbs_n < localBucklingBoundingStress ) {
     Tbs_n = localBucklingBoundingStress;
   }
 
@@ -931,13 +969,14 @@ void shenSteel01::plasticityModel(double strainIncrement, double initialStress, 
   finalStress = initialStress + strainIncrement * finalTangent;
 
   // Make sure that the loading point does not breach the bounding surface
-//  if ( finalStress >= Epo * ep + Tbs_p ) {
-//    finalStress = Epo * ep + Tbs_p;
-//    finalTangent =  Epo;
-//  } else if ( finalStress <= Epo * ep + Tbs_n ) {
-//    finalStress = Epo * ep + Tbs_n;
-//    finalTangent = Epo;
-//  }
+  if ( finalStress >= Epo * ep + Tbs_p ) {
+    finalStress = Epo * ep + Tbs_p;
+    finalTangent =  Epo;
+  } else if ( finalStress <= Epo * ep + Tbs_n ) {
+    finalStress = Epo * ep + Tbs_n;
+    finalTangent = Epo;
+  }
+
 
   return;
 }
@@ -1280,16 +1319,21 @@ int shenSteel01::recvSelf(int cTag, Channel &theChannel,
 
 void shenSteel01::Print(OPS_Stream &s, int flag) {
   s<<"shenSteel01, tag: "<<this->getTag()<<endln;
+  s<<" Es:      "<<Ee<<endln;
   s<<" Fy:      "<<fy<<endln;
   s<<" Fu:      "<<fu<<endln;
-  s<<" Es:      "<<Ee<<endln;
   s<<" eu:      "<<eu<<endln;
   s<<" kappaBar0: "<<Rbso<<" Ep0i: "<<Epoi<<" alpha: "<<alfa<<" a: "<<a<<" b: "<<bb<<" c: "<<c<<" omega: "<<w<<" zeta: "<<ksi<<" e: "<<e<<" f: "<<fE<< endln;
-  s<<" modelYieldPlateau: "<<modelYieldPlateau<<" M: "<<M<<" Epst: "<<Est<<" epst: "<<est<< endln;
-  s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<< endln;
-  s<<" modelLocalBuckling: "<<modelLocalBuckling<<" localBucklingStrain: "<<localBucklingStrain<<" Ksft: "<<Ksft<<" alphaFulb: "<<alphaFulb<<" refFulb: "<<refFulb<< endln;
-  s<<" modelDegradeEp: "<<modelDegradeEp<<" degradeEpRate: "<<degradeEpRate<<" degradeEpLimit: "<<degradeEpLimit<< endln;
-  s<<" modelDegradeKappa: "<<modelDegradeKappa<<" degradeKappaRate: "<<degradeKappaRate<<" degradeKappaLimit: "<<degradeKappaLimit<< endln;
-  s<<" modelDegradeFulb: "<<modelDegradeFulb<<" degradeFulbRate: "<<degradeFulbRate<<" degradeFulbLimit: "<<degradeFulbLimit<< endln;
+  s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<<" Epst: "<<Est<< endln;
+  if (modelYieldPlateau == true)
+    s<<" modelYieldPlateau: true   M: "<<M<<" epst: "<<est<< endln;
+  if (modelLocalBuckling == true)
+    s<<" modelLocalBuckling: true  localBucklingStrain: "<<localBucklingStrain<<" Ksft: "<<Ksft<<" alphaFulb: "<<alphaFulb<<" refFulb: "<<refFulb<< endln;
+  if (modelDegradeEp == true)
+    s<<" modelDegradeEp: true      degradeEpRate: "<<degradeEpRate<<" degradeEpLimit: "<<degradeEpLimit<< endln;
+  if (modelDegradeKappa == true)
+    s<<" modelDegradeKappa: true   degradeKappaRate: "<<degradeKappaRate<<" degradeKappaLimit: "<<degradeKappaLimit<< endln;
+  if (modelDegradeFulb == true)
+    s<<" modelDegradeFulb: true    degradeFulbRate: "<<degradeFulbRate<<" degradeFulbLimit: "<<degradeFulbLimit<< endln;
   return;
 }
