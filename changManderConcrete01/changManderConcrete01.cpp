@@ -17,11 +17,11 @@
 **   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
 **                                                                    **
 ** ****************************************************************** */
-                                                                        
+
 // $Revision: 1.1 $
 // $Date: 2010-05-04 17:14:45 $
 // $Source: /scratch/slocal/chroot/cvsroot/openseescomp/CompositePackages/changManderConcrete01/changManderConcrete01.cpp,v $
-                                                                        
+
 // Documentation: Chang and Mander Concrete Model
 // uniaxialMaterial changManderConcrete01 $tag $fcc $ecc $Ec $rn_pre $rn_post $ft $et $rp $xp_cr <options>
 //
@@ -74,9 +74,9 @@
 #endif
 
 OPS_Export void
-localInit() 
+localInit()
 {
-  OPS_Error("changManderConcrete01 unaxial material \nWritten by Mark D Denavit, University of Illinois at Urbana-Champaign, Copyright 2010\n", 1);
+  OPS_Error("changManderConcrete01 unaxial material \nWritten by Mark D. Denavit, University of Illinois at Urbana-Champaign\n", 1);
 }
 
 OPS_Export void *
@@ -99,9 +99,9 @@ OPS_changManderConcrete01()
   numData = 9;
   if (OPS_GetDoubleInput(&numData, dData) != 0) {
     opserr << "WARNING invalid input, want: uniaxialMaterial changManderConcrete01 tag fcc ecc Ec rn_pre rn_post ft et rp xp_cr \n";
-    return 0;	
+    return 0;
   }
-  
+
   // Check the data
   if ( dData[0] >= 0 ) {
 	  opserr << "WARNING fcc should be input as a negative value \n";
@@ -109,37 +109,37 @@ OPS_changManderConcrete01()
   }
   if ( dData[1] >= 0 ) {
 	  opserr << "WARNING ecc should be input as a negative value \n";
-	  return 0;	  
+	  return 0;
   }
   if ( dData[2] <= 0 ) {
 	  opserr << "WARNING Ec should be a positive value \n";
-	  return 0;	  
+	  return 0;
   }
   if ( dData[3] <= 0 ) {
 	  opserr << "WARNING rn_pre should be a positive value \n";
-	  return 0;	  
+	  return 0;
   }
-  if ( dData[4] <= 0 ) {
-	  opserr << "WARNING rn_post should be a positive value \n";
-	  return 0;	  
-  }  
+  if ( dData[4] < 0 ) {
+	  opserr << "WARNING rn_post should be a positive value (or zero if no spalling) \n";
+	  return 0;
+  }
   if ( dData[5] < 0 ) {
 	  opserr << "WARNING ft should be input as a positive value \n";
-	  return 0;	  
-  }  
+	  return 0;
+  }
   if ( dData[6] < 0 ) {
 	  opserr << "WARNING et should be input as a positive value \n";
-	  return 0;	  
-  }  
+	  return 0;
+  }
   if ( dData[7] <= 0 ) {
 	  opserr << "WARNING rp should be a positive value \n";
-	  return 0;	  
-  }    
+	  return 0;
+  }
   if ( dData[8] <= 1 ) {
 	  opserr << "WARNING xp_cr should be greater than 1.0 \n";
-	  return 0;	  
-  }    
-  
+	  return 0;
+  }
+
   int sDataLength = 20;
   char *sData = new char[sDataLength];
 
@@ -160,6 +160,10 @@ OPS_changManderConcrete01()
 			  opserr << "WARNING xn_cr should be greater than 1.0 \n";
 			  return 0;
 		  }
+      if ( dData[4] == 0.0 ) {
+        opserr << "WARNING If modeling spalling, rn_post cannot be zero \n";
+        return 0;
+      }
 
 	  } else {
 		  opserr << "WARNING unknown option " << sData << "\n";
@@ -182,25 +186,22 @@ OPS_changManderConcrete01()
 
 changManderConcrete01::changManderConcrete01(int tag, double i1, double i2, double i3, double i4, double i5, double i6, double i7, double i8, double i9, double i10)
 :UniaxialMaterial(tag,MAT_TAG_changManderConcrete01),
- Fc_n(i1), ec_n(i2), Ec(i3), r_n_pre(i4), r_n_post(i5), 
+ Fc_n(i1), ec_n(i2), Ec(i3), r_n_pre(i4), r_n_post(i5),
  Fc_p(i6), ec_p(i7), r_p(i8), x_p_cr(i9), x_n_cr(i10)
 {
 	double ycr, zcr, n;
 
 	n = fabs(Ec * ec_p / Fc_p);
 	tsaiEquation(x_p_cr, r_p, n, ycr, zcr);
-	ecr_p = x_p_cr*ec_p;
-	ecrk_p = ecr_p - (Fc_p * ycr)/(Ec * zcr);
+	ecrk_p = x_p_cr*ec_p - (Fc_p * ycr)/(Ec * zcr);
 
 	if ( x_n_cr >= 1.0 ) {
 		modelSpalling = true;
 		n = fabs(Ec * ec_n / Fc_n);
 		tsaiEquation(x_n_cr, r_n_post, n, ycr, zcr);
-		ecr_n = x_n_cr*ec_n;
-		espall = ecr_n - (Fc_n * ycr)/(Ec * zcr);
+		espall = x_n_cr*ec_n - (Fc_n * ycr)/(Ec * zcr);
 	} else {
 		modelSpalling = false;
-		ecr_n = 0.0;
 		espall = 0.0;
 	}
 
@@ -209,15 +210,13 @@ changManderConcrete01::changManderConcrete01(int tag, double i1, double i2, doub
 
 changManderConcrete01::changManderConcrete01()
 :UniaxialMaterial(0,MAT_TAG_changManderConcrete01),
-Fc_n(0.0), ec_n(0.0), Ec(0.0), r_n_pre(0.0), r_n_post(0.0), 
+Fc_n(0.0), ec_n(0.0), Ec(0.0), r_n_pre(0.0), r_n_post(0.0),
 Fc_p(0.0), ec_p(0.0), r_p(0.0), x_p_cr(0.0), x_n_cr(0.0)
 {
-	ecr_p = 0.0;
 	ecrk_p = 0.0;
 	modelSpalling = false;
-	ecr_n = 0.0;
 	espall = 0.0;
-	
+
 	this->revertToStart();
 }
 
@@ -226,17 +225,17 @@ changManderConcrete01::~changManderConcrete01()
   // does nothing
 }
 
-int 
+int
 changManderConcrete01::setTrialStrain(double strain, double strainRate)
 {
 	// Return state variables to last commited values
-	backToCommitStateVar();		
-		
+	backToCommitStateVar();
+
 	// Define trial strain and strain increment
 	double strain_incr;
 	Tstrain = strain; // For use with other elements
 	strain_incr = Tstrain - Cstrain; // Works for both
-	
+
 	if(modelSpalling == true && isSpalled == true){
 		Trule = 5;
 	} else if(isCracked == false) { // Pre-Cracking
@@ -248,21 +247,21 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 			} else if ( modelSpalling == true && Tstrain <= espall ){
 				isSpalled = true;
 				Trule = 5;
-			} else if( Tstrain <= 0.0 ) { 
+			} else if( Tstrain <= 0.0 ) {
 				// Compressive Strain
 				Trule = 1;
-			} else if ( Tstrain <= ecrk_p + eo ) { 
-				// Tensile Strain less than cracking 
+			} else if ( Tstrain <= ecrk_p + eo ) {
+				// Tensile Strain less than cracking
 				Trule = 2;
-			} else { 
+			} else {
 				// Tensile strain greater than cracking
 				isCracked = true;
 				Trule = 6;
 			}
 			break;
-			
+
 		case 1:
-			if ( strain_incr <= SMALL_STRAIN ) { 
+			if ( strain_incr <= SMALL_STRAIN ) {
 				// Continued compressive loading
 				if ( modelSpalling == true && Tstrain <= espall ) {
 					isSpalled = true;
@@ -270,7 +269,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				} else {
 					Trule = 1;
 				}
-			} else { 
+			} else {
 				// Unloading
 				er1 = Cstrain;
 				double fr1, scratch;
@@ -286,7 +285,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 
 				// Start of shifting the tensile branch
 				double eo_old = eo;
-				
+
 				// if xu_p < xu_n force a new reversal from tensile branch and reset eo
 				if ( fabs((er2-eo)/ec_p) < fabs(er1/ec_n) ) {
 					er2 = er1 * ec_p / ec_n;
@@ -318,7 +317,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				positiveEnvelope(er2,fr2,scratch);
 				double Deo = 2*fr2/(Esec_p+Epl_p);
 				eo = epl_n - (er2-eo-Deo);
-				
+
 				// shift all necessary strains (some may not be necessary)
 				er2 += (eo-eo_old);
 				er4 += (eo-eo_old);
@@ -330,8 +329,8 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				ere_str_p += (eo-eo_old);
 				epl_p += (eo-eo_old);
 				// End of shifting the tensile branch
-				
-				
+
+
 				if ( Tstrain <= epl_n ) {
 					Trule = 3;
 					f3target = Cstress;
@@ -344,25 +343,25 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					// Tensile strain greater than cracking
 					isCracked = true;
 					Trule = 6;
 				}
 			}
 			break;
-			
+
 		case 2:
 			if ( strain_incr >= -SMALL_STRAIN ) { // Continued tensile loading
-				if ( Tstrain <= ecrk_p + eo ) { 
+				if ( Tstrain <= ecrk_p + eo ) {
 					// Before cracking
 					Trule = 2;
-				} else { 
+				} else {
 					// After Cracking
 					isCracked = true;
 					Trule = 6;
 				}
-			} else { 
+			} else {
 				// Unloading
 				er2 = Cstrain;
 				double fr2, scratch;
@@ -398,10 +397,10 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 3:
 			if ( strain_incr >= -SMALL_STRAIN ) { // Continued tensile loading
-				if ( Tstrain <= epl_n ) { 
+				if ( Tstrain <= epl_n ) {
 					Trule = 3;
 					// target remains as it is
 				} else if ( Tstrain <= er2 ) {
@@ -411,13 +410,13 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					f81target = fnew_p;
 					E81target = Enew_p;
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
-				} else if ( Tstrain <= ecrk_p + eo ) {	
+				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
-			} else { 
+			} else {
 				// Reversal from Rule 3
 				er3 = Cstrain;
 				double fr1, scratch;
@@ -426,12 +425,12 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				fnew_str_n = fr1 - delta_f_n * ( er1 - er3 )/( er1 - epl_n );
 				Enew_str_n = ( fnew_str_n - fr3 ) / ( er1 - er3 );
 				ere_str_n = er1 + delta_e_n * ( er1 - er3 ) / ( er1 - epl_n );
-				
+
 				if ( Tstrain >= er1 ) {
 					Trule = 16;
 					f71target = fnew_str_n;
-					E71target = Enew_str_n; 
-					e72target = ere_str_n; // Because arriving on Rule 16 after partial unloading			
+					E71target = Enew_str_n;
+					e72target = ere_str_n; // Because arriving on Rule 16 after partial unloading
 				} else if ( Tstrain >= ere_str_n )  {
 					Trule = 7;
 					f71target = fnew_str_n;
@@ -444,11 +443,11 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					Trule = 1;
 				}
 			}
-				
+
 			break;
-			
+
 		case 4:
-			if ( strain_incr <= SMALL_STRAIN ) { 
+			if ( strain_incr <= SMALL_STRAIN ) {
 				// Continued compressive unloading
 				if ( Tstrain >= epl_p ) {
 					Trule = 4;
@@ -466,7 +465,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				} else {
 					Trule = 1;
 				}
-			} else { 
+			} else {
 				// Reversal
 				er4 = Cstrain;
 				double fr2, scratch;
@@ -475,11 +474,11 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				fnew_str_p = fr2 - delta_f_p * ( er2 - er4 )/( er2 - epl_p );
 				Enew_str_p = ( fnew_str_p - fr4 ) / ( er2 - er4 );
 				ere_str_p = er2 + delta_e_p * ( er2 - er4 ) / ( er2 - epl_p );
-				
+
 				if ( Tstrain <= er2 ) {
 					Trule = 17;
 					f81target = fnew_str_p;
-					E81target = Enew_str_p; 
+					E81target = Enew_str_p;
 					e82target = ere_str_p; // Because arriving on Rule 17 after partial unloading
 				} else if ( Tstrain <= ere_str_p ) {
 					Trule = 8;
@@ -488,13 +487,13 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_str_p; // Because arriving on Rule 8 after partial unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
 			}
 			break;
-			
+
 		case 7:
 			if ( strain_incr <= SMALL_STRAIN ) {
 				// Continued compressive
@@ -531,13 +530,13 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
 			}
 			break;
-			
+
 		case 8:
 			if ( strain_incr >= SMALL_STRAIN ) {
 				// Continued tensile
@@ -545,7 +544,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					Trule = 8;
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					// Tensile strain greater than cracking
 					isCracked = true;
 					Trule = 6;
@@ -586,9 +585,9 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 9:
-			if ( strain_incr >= -SMALL_STRAIN ) { 
+			if ( strain_incr >= -SMALL_STRAIN ) {
 				// Continued tensile loading
 				if ( Tstrain <= er2 ) {
 					Trule = 9;
@@ -597,17 +596,17 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					f81target = fnew_p;
 					E81target = Enew_p;
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
-				} else if ( Tstrain <= ecrk_p + eo ) {	
+				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
-			} else { 
+			} else {
 				// Reversal from Rule 9
 				er9 = Cstrain;
 				eb = er1 - ((er9 - epl_n)/(er2 - epl_n))*(er1-epl_p);
-				
+
 				if ( Tstrain >= eb ) {
 					Trule = 11;
 				} else if ( Tstrain >= er1 ) {
@@ -625,10 +624,10 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 10:
-			if ( strain_incr <= SMALL_STRAIN ) { 
-				// Continued compressive 
+			if ( strain_incr <= SMALL_STRAIN ) {
+				// Continued compressive
 				if ( Tstrain >= er1 ) {
 					Trule = 10;
 				} else if ( Tstrain >= ere_n ) {
@@ -642,11 +641,11 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				} else {
 					Trule = 1;
 				}
-			} else { 
+			} else {
 				// Reversal
 				er10 = Cstrain;
 				ea = epl_n + ((er1 - er10)/(er1 - epl_p))*(er2-epl_n);
-				
+
 				if ( Tstrain <= ea ) {
 					Trule = 12;
 				} else if ( Tstrain <= er2 ) {
@@ -658,15 +657,15 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
 			}
 			break;
-			
+
 		case 11:
-			if ( strain_incr <= SMALL_STRAIN ) { 
+			if ( strain_incr <= SMALL_STRAIN ) {
 				// Continued compressive
 				if ( Tstrain >= eb ) {
 					Trule = 11;
@@ -683,7 +682,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				} else {
 					Trule = 1;
 				}
-			} else { 
+			} else {
 				// Reversal
 				if ( Tstrain <= er9 ) {
 					Trule = 11;
@@ -696,15 +695,15 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
 			}
 			break;
-			
+
 		case 12:
-			if ( strain_incr >= -SMALL_STRAIN ) { 
+			if ( strain_incr >= -SMALL_STRAIN ) {
 				// Continued tensile loading
 				if ( Tstrain < ea ) {
 					Trule = 12;
@@ -715,13 +714,13 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					f81target = fnew_p;
 					E81target = Enew_p;
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
-				} else if ( Tstrain <= ecrk_p + eo ) {	
+				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
-			} else { 
+			} else {
 				// Reversal from Rule 12
 				if ( Tstrain >= er10 ) {
 					Trule = 12;
@@ -762,7 +761,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				if ( Tstrain <= er3 ) {
 					Trule = 16;
 					// Targets stay as is
-				} else if ( Tstrain <= epl_n ) { 
+				} else if ( Tstrain <= epl_n ) {
 					Trule = 3;
 					// target remains as it is
 				} else if ( Tstrain <= er2 ) {
@@ -772,15 +771,15 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					f81target = fnew_p;
 					E81target = Enew_p;
 					e82target = ere_p; // Because arriving on Rule 8 after full unloading
-				} else if ( Tstrain <= ecrk_p + eo ) {	
+				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					isCracked = true;
 					Trule = 6;
 				}
 			}
-			break;					
-			
+			break;
+
 		case 17:
 			if ( strain_incr >= SMALL_STRAIN ) {
 				// Continued tensile
@@ -794,7 +793,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					e82target = ere_str_p; // Because arriving on Rule 8 after partial unloading
 				} else if ( Tstrain <= ecrk_p + eo ) {
 					Trule = 2;
-				} else { 
+				} else {
 					// Tensile strain greater than cracking
 					isCracked = true;
 					Trule = 6;
@@ -822,11 +821,11 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		default:
 			// It should not arrive here
 			break;
-			
+
 	} // End of switch for Crule (for pre-cracking region)
 
 	} else { // Post-Cracking
@@ -835,7 +834,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 		switch ( Crule ) {
 		case 1:
 			//trialConcData<<"I got to the rule 1 area"<<endl;
-			if ( strain_incr <= SMALL_STRAIN ) { 
+			if ( strain_incr <= SMALL_STRAIN ) {
 				// Continued compressive loading
 				if ( modelSpalling == true && Tstrain <= espall ) {
 					isSpalled = true;
@@ -866,7 +865,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 3:
 			if ( strain_incr >= -SMALL_STRAIN ) { // Continued unloading
 				if ( Tstrain <= epl_n ) {
@@ -882,12 +881,12 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				fnew_str_n = fr1 - delta_f_n * ( er1 - er3 )/( er1 - epl_n );
 				Enew_str_n = ( fnew_str_n - fr3 ) / ( er1 - er3 );
 				ere_str_n = er1 + delta_e_n * ( er1 - er3 ) / ( er1 - epl_n );
-				
+
 				if ( Tstrain >= er1 ) {
 					Trule = 16;
 					f71target = fnew_str_n;
-					E71target = Enew_str_n;	
-					e72target = ere_str_n; // Because arriving on Rule 7 after partial unloading				
+					E71target = Enew_str_n;
+					e72target = ere_str_n; // Because arriving on Rule 7 after partial unloading
 				} else if ( Tstrain >= ere_str_n ) {
 					Trule = 7;
 					f71target = fnew_str_n;
@@ -901,7 +900,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 6:
 			if ( strain_incr >= -SMALL_STRAIN ) { // Continued tensile loading
 				Trule = 6;
@@ -922,7 +921,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 7:
 			if ( strain_incr <= SMALL_STRAIN ) {
 				if ( Tstrain > e72target ) {
@@ -954,7 +953,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 13:
 			if ( strain_incr <= SMALL_STRAIN ) {
 				if ( Tstrain >= er1 ) {
@@ -981,7 +980,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 14:
 			if ( strain_incr >= -SMALL_STRAIN ) {
 				if ( Tstrain < eb ) {
@@ -1009,7 +1008,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-			
+
 		case 15:
 			if ( strain_incr <= SMALL_STRAIN ) {
 				if ( Tstrain > er13) {
@@ -1037,7 +1036,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				}
 			}
 			break;
-		
+
 		case 16:
 			if ( strain_incr <= SMALL_STRAIN ) {
 				if ( Tstrain > er1 ) {
@@ -1065,15 +1064,15 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 					Trule = 6;
 				}
 			}
-			break;			
-			
+			break;
+
 		default:
 			// It should not arrive here
 			break;
-			
+
 	} // End of switch for Crule
 	} // End of if statment for isCracked
-	
+
 	// Now that we have found the new rule and updated any state variables, we find the new stress and tangent
 	switch ( Trule ) {
 		case 0:
@@ -1106,7 +1105,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				// Second Branch of Rule 7 remains Rule 7
 				// First Branch has been renamed Rule 16
 				double ff, Ef;
-				negativeEnvelope(e72target,ff,Ef); // Calculate target stress and tangent		
+				negativeEnvelope(e72target,ff,Ef); // Calculate target stress and tangent
 				transitionCurve(Tstrain, Tstress, Ttangent, er1, f71target, E71target, e72target, ff, Ef, Trule);
 			}
 			break;
@@ -1115,7 +1114,7 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 				// Second Branch of RUle 8 remains Rule 8
 				// First Branch has been renamed Rule 17
 				double ff, Ef;
-				positiveEnvelope(e82target,ff,Ef); // Calculate target stress and tangent		
+				positiveEnvelope(e82target,ff,Ef); // Calculate target stress and tangent
 				transitionCurve(Tstrain, Tstress, Ttangent, er2, f81target, E81target, e82target, ff, Ef, Trule);
 			}
 			break;
@@ -1190,46 +1189,46 @@ changManderConcrete01::setTrialStrain(double strain, double strainRate)
 			break;
 		default:
 			// It should not arrive here
-			break;			
+			break;
 	}
-	
+
 	return 0;
 }
 
-double 
+double
 changManderConcrete01::getStrain(void)
 {
   return Tstrain;
 }
 
-double 
+double
 changManderConcrete01::getStress(void)
 {
   return Tstress;
 }
 
 
-double 
+double
 changManderConcrete01::getTangent(void)
 {
   return Ttangent;
 }
 
-double 
+double
 changManderConcrete01::getInitialTangent(void)
 {
   return Ec;
 }
 
-int 
+int
 changManderConcrete01::commitState(void)
 {
 	this->commitStateVar();
 	return 0;
-}	
+}
 
 
-int 
+int
 changManderConcrete01::revertToLastCommit(void)
 {
 	this->backToCommitStateVar();
@@ -1237,15 +1236,15 @@ changManderConcrete01::revertToLastCommit(void)
 }
 
 
-int 
+int
 changManderConcrete01::revertToStart(void)
 {
 	isCracked = false;	CisCracked = false;
 	isSpalled = false;	CisSpalled = false;
 	Trule = 0; Crule = 0;
 	//isCracked = true;	CisCracked = true; // For Testing in Post-Cracking
-	//Trule = 0; Crule = 1; // For Testing in Post-Cracking	
-    
+	//Trule = 0; Crule = 1; // For Testing in Post-Cracking
+
 	Tstrain = 0.0; Cstrain = 0.0;
 	Tstress = 0.0; Cstress = 0.0;
 	Ttangent = 0.0; Ctangent = 0.0;
@@ -1272,19 +1271,19 @@ changManderConcrete01::revertToStart(void)
 	E81target = 0.0; CE81target = 0.0;
 	e82target = 0.0; Ce82target = 0.0;
 	f4target = 0.0; Cf4target = 0.0;
-	delta_e_p = 0.0; Cdelta_e_p = 0.0;  
+	delta_e_p = 0.0; Cdelta_e_p = 0.0;
 	delta_f_p = 0.0; Cdelta_f_p = 0.0;
 	fnew_p = 0.0; Cfnew_p = 0.0;
-	Enew_p = 0.0; CEnew_p = 0.0; 
-	ere_p = 0.0; Cere_p = 0.0; 
-	fnew_str_p = 0.0; Cfnew_str_p = 0.0; 
+	Enew_p = 0.0; CEnew_p = 0.0;
+	ere_p = 0.0; Cere_p = 0.0;
+	fnew_str_p = 0.0; Cfnew_str_p = 0.0;
 	Enew_str_p = 0.0; CEnew_str_p = 0.0;
-	ere_str_p = 0.0; Cere_str_p = 0.0; 
-	epl_p = 0.0; Cepl_p = 0.0; 
+	ere_str_p = 0.0; Cere_str_p = 0.0;
+	epl_p = 0.0; Cepl_p = 0.0;
 	Epl_p = 0.0; CEpl_p = 0.0;
-	er2 = 0.0; er4 = 0.0; er9 = 0.0; er10 = 0.0; 
+	er2 = 0.0; er4 = 0.0; er9 = 0.0; er10 = 0.0;
 	Cer2 = 0.0; Cer4 = 0.0; Cer9 = 0.0; Cer10 = 0.0;
-	Esec_p = 0.0; CEsec_p = 0.0; 
+	Esec_p = 0.0; CEsec_p = 0.0;
 	ea = 0.0; Cea = 0.0;
 
 	return 0;
@@ -1295,7 +1294,7 @@ UniaxialMaterial *
 changManderConcrete01::getCopy(void)
 {
   changManderConcrete01 *theCopy = new changManderConcrete01(this->getTag(), Fc_n, ec_n, Ec, r_n_pre, r_n_post, Fc_p, ec_p, r_p, x_p_cr, x_n_cr);
-  
+
   theCopy->isCracked = this->isCracked;
   theCopy->CisCracked = this->CisCracked;
   theCopy->isSpalled = this->isSpalled;
@@ -1397,7 +1396,7 @@ changManderConcrete01::getCopy(void)
 }
 
 
-int 
+int
 changManderConcrete01::sendSelf(int cTag, Channel &theChannel)
 {
   int res = 0;
@@ -1412,19 +1411,19 @@ changManderConcrete01::sendSelf(int cTag, Channel &theChannel)
   data(7) = ec_p;
   data(8) = r_p;
   data(9) = x_p_cr;
-  data(10) = ecr_p;
+  data(10) = 0.0;
   data(11) = ecrk_p;
-  
+
   if (isCracked)
     data(12) = 1;
   else
 	data(12) = 0;
-  
+
   if (CisCracked)
     data(13) = 1;
   else
 	data(13) = 0;
-  
+
   data(14) = Trule;
   data(15) = Crule;
   data(16) = Tstrain;
@@ -1519,24 +1518,24 @@ changManderConcrete01::sendSelf(int cTag, Channel &theChannel)
   data(105) = Cea;
 
   res = theChannel.sendVector(this->getDbTag(), cTag, data);
-  if (res < 0) 
+  if (res < 0)
     opserr << "changManderConcrete01::sendSelf() - failed to send data\n";
 
   return res;
 }
 
-int 
-changManderConcrete01::recvSelf(int cTag, Channel &theChannel, 
+int
+changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
 				 FEM_ObjectBroker &theBroker)
 {
   int res = 0;
   static Vector data(6);
   res = theChannel.recvVector(this->getDbTag(), cTag, data);
-  if (res < 0) 
+  if (res < 0)
     opserr << "changManderConcrete01::recvSelf() - failed to recv data\n";
   else {
     this->setTag(data(0));
-    
+
     Fc_n = data(1);
     ec_n = data(2);
     Ec = data(3);
@@ -1546,19 +1545,19 @@ changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
     ec_p = data(7);
     r_p = data(8);
     x_p_cr = data(9);
-    ecr_p = data(10);
+
     ecrk_p = data(11);
-    
+
 	if (data(12) == 1)
 		isCracked = true;
 	else
 		isCracked = false;
-	
+
 	if (data(13) == 1)
 		CisCracked = true;
 	else
 		CisCracked = false;
-	
+
 	Trule = data(14);
 	Crule = data(15);
 	Tstrain = data(16);
@@ -1650,13 +1649,13 @@ changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
 	Esec_p = data(102);
 	CEsec_p = data(103);
 	ea = data(104);
-	Cea = data(105);    
+	Cea = data(105);
   }
 
   return res;
 }
 
-void 
+void
 changManderConcrete01::Print(OPS_Stream &s, int flag)
 {
 	s<<"changManderConcrete01, tag: "<<this->getTag()<<endln;
@@ -1674,52 +1673,69 @@ changManderConcrete01::Print(OPS_Stream &s, int flag)
 }
 
 
-void 
+void
 changManderConcrete01::negativeEnvelope(double strain, double &stress, double &tangent)
-{	
+{
 	double x_n, n_n, y, z;
 	x_n = strain/ec_n;
 	n_n = fabs(Ec * ec_n / Fc_n);
 
-	if ( modelSpalling == true && strain <= espall ) {
-		// spalled
-		stress = 0.0;
-		tangent = 0.0;
-	} else if ( modelSpalling == true && strain <= ecr_n ) {
-		// linear softening branch between critical and spalled
-		double y_cr, z_cr;
-		tsaiEquation(x_n_cr, r_n_post, n_n, y_cr, z_cr);
-		stress = Fc_n * (y_cr + n_n * z_cr * (x_n - x_n_cr));
-		tangent = Ec * z_cr;
-	} else if ( strain <= 0.0 ) {
-		// nonlinear curve defined by Chang and Mander
-		if ( strain >= ec_n ) {
-			tsaiEquation(x_n, r_n_pre, n_n, y, z);	
-		} else {
-			tsaiEquation(x_n, r_n_post, n_n, y, z);
-		}
-		stress = Fc_n * y;
-		tangent = Ec * z;
+	if ( modelSpalling ) {
+	  if ( strain > 0.0 ) {
+	    stress = 0.0;
+	    tangent = 0.0;
+	  } else if ( strain > ec_n ) {
+	    tsaiEquation(x_n, r_n_pre, n_n, y, z);
+	    stress = Fc_n * y;
+	    tangent = Ec * z;
+	  } else if ( strain > ec_n*x_n_cr ) {
+	    tsaiEquation(x_n, r_n_post, n_n, y, z);
+	    stress = Fc_n * y;
+	    tangent = Ec * z;
+	  } else if ( strain > espall ) {
+	    // linear softening branch between critical and spalled
+	    double y_cr, z_cr;
+	    tsaiEquation(x_n_cr, r_n_post, n_n, y_cr, z_cr);
+	    stress = Fc_n * (y_cr + n_n * z_cr * (x_n - x_n_cr));
+	    tangent = Ec * z_cr;
+	  } else {
+      stress = 0.0;
+      tangent = 0.0;
+	  }
 	} else {
-		// it should not get here but if it does return zero
-		stress = 0.0;
-		tangent = 0.0;
+    if ( strain > 0.0 ) {
+      stress = 0.0;
+      tangent = 0.0;
+    } else if ( strain > ec_n ) {
+      tsaiEquation(x_n, r_n_pre, n_n, y, z);
+      stress = Fc_n * y;
+      tangent = Ec * z;
+    } else {
+      if ( r_n_post == 0 ) {
+        stress = Fc_n;
+        tangent = 0.0;
+      } else {
+        tsaiEquation(x_n, r_n_post, n_n, y, z);
+        stress = Fc_n * y;
+        tangent = Ec * z;
+      }
+    }
 	}
 	return;
 }
 
-void 
+void
 changManderConcrete01::positiveEnvelope(double strain, double &stress, double &tangent)
 {
 	double n_p, x_p;
 	n_p = fabs(Ec * ec_p / Fc_p);
 	x_p = (strain - eo)/ec_p;
-	 
+
 	if( strain - eo <= 0 ) {
 		// it should not get here but if it does return zero
 		stress = 0.0;
 		tangent = 0.0;
-	} else if ( strain - eo <= ecr_p ) {
+	} else if ( strain - eo <= x_p_cr*ec_p ) {
 		// nonlinear pre-critical branch
 		double y, z;
 		tsaiEquation(x_p, r_p, n_p, y, z);
@@ -1736,45 +1752,45 @@ changManderConcrete01::positiveEnvelope(double strain, double &stress, double &t
 		stress = SMALL_STRESS;
 		tangent = SMALL_TANGENT;
 	}
-	return;	
+	return;
 }
 
 
-void 
-changManderConcrete01::transitionCurve(double Tstrain, double &Tstress, double &Ttangent, 
+void
+changManderConcrete01::transitionCurve(double Tstrain, double &Tstress, double &Ttangent,
 		double ei, double fi, double Ei, double ef, double ff, double Ef, int rule)
 {
 	double R, A, Esec;
-	
+
 	if ( fabs (ei/ef - 1) < 1.0e-4) {
 		// Inital and final strain are too close together, linear function
 		Ttangent = (ff - fi) / (ef - ei);
 		Tstress = fi + Ttangent * (Tstrain - ei);
 		return;
-	} 
-	
+	}
+
 	Esec = ( ff - fi ) / ( ef - ei );
-	
+
 	if( fabs(Esec-Ei) <= SMALL_NUMBER ) {
 		R = 0.0;
 	} else {
 		R = ( Ef - Esec ) / ( Esec - Ei );
 	}
-	
+
 	if( R <= 0.0 ) {
 		// Smooth transition curve without change of curvature not possible, linear function
 		Ttangent = (ff - fi) / (ef - ei);
 		Tstress = fi + Ttangent * (Tstrain - ei);
 		return;
 	}
-	
+
 	A = (Esec-Ei) * pow( fabs((Tstrain-ei)/(ef - ei)) , R );
 	Tstress = fi + (Tstrain-ei) * ( Ei + A );
 	Ttangent = Ei + A*(R+1);
 	return;
 }
 
-void 
+void
 changManderConcrete01::tsaiEquation(double x, double r, double n, double &y, double &z)
 {
 	double D;
@@ -1785,22 +1801,22 @@ changManderConcrete01::tsaiEquation(double x, double r, double n, double &y, dou
 	}
 	y = ( n * x / D );
 	z = ( 1 - pow( x, r ) ) / ( D * D );
-	return;	
+	return;
 }
 
 void
 changManderConcrete01::backToCommitStateVar(void){
 	isCracked = CisCracked;
 	isSpalled = CisSpalled;
-	Trule = Crule;	
+	Trule = Crule;
 	Tstrain = Cstrain;
 	Tstress = Cstress;
 	Ttangent = Ctangent;
 	eo = Ceo;
-	er1 = Cer1; 
-	er3 = Cer3; 
-	er6 = Cer6; 
-	er13 = Cer13; 
+	er1 = Cer1;
+	er3 = Cer3;
+	er6 = Cer6;
+	er13 = Cer13;
 	er14 = Cer14;
 	eb = Ceb;
 	Esec_n = CEsec_n;
@@ -1822,20 +1838,20 @@ changManderConcrete01::backToCommitStateVar(void){
 	E81target = CE81target;
 	e82target = Ce82target;
 	f4target = Cf4target;
-	delta_e_p = Cdelta_e_p;  
+	delta_e_p = Cdelta_e_p;
 	delta_f_p = Cdelta_f_p;
 	fnew_p = Cfnew_p;
-	Enew_p = CEnew_p; 
-	ere_p = Cere_p; 
-	fnew_str_p = Cfnew_str_p; 
+	Enew_p = CEnew_p;
+	ere_p = Cere_p;
+	fnew_str_p = Cfnew_str_p;
 	Enew_str_p = CEnew_str_p;
-	ere_str_p = Cere_str_p; 
-	epl_p = Cepl_p; 
+	ere_str_p = Cere_str_p;
+	epl_p = Cepl_p;
 	Epl_p = CEpl_p;
 	er2 = Cer2;
-	er4 = Cer4; 
-	er9 = Cer9; 
-	Esec_p = CEsec_p; 
+	er4 = Cer4;
+	er9 = Cer9;
+	Esec_p = CEsec_p;
 	er10 = Cer10;
 	ea = Cea;
 }
@@ -1844,15 +1860,15 @@ void
 changManderConcrete01::commitStateVar(void){
 	CisCracked = isCracked;
 	CisSpalled = isSpalled;
-	Crule = Trule;	
+	Crule = Trule;
 	Cstrain = Tstrain;
 	Cstress = Tstress;
 	Ctangent = Ttangent;
 	Ceo = eo;
-	Cer1 = er1; 
-	Cer3 = er3; 
-	Cer6 = er6; 
-	Cer13 = er13; 
+	Cer1 = er1;
+	Cer3 = er3;
+	Cer6 = er6;
+	Cer13 = er13;
 	Cer14 = er14;
 	Ceb = eb;
 	CEsec_n = Esec_n;
@@ -1868,26 +1884,26 @@ changManderConcrete01::commitStateVar(void){
 	Cere_str_n = ere_str_n;
 	Cf71target = f71target;
 	CE71target = E71target;
-	Ce72target = e72target;  
+	Ce72target = e72target;
 	Cf3target = f3target;
 	Cf81target = f81target;
 	CE81target = E81target;
 	Ce82target = e82target;
 	Cf4target = f4target;
-	Cdelta_e_p = delta_e_p;  
+	Cdelta_e_p = delta_e_p;
 	Cdelta_f_p = delta_f_p;
 	Cfnew_p = fnew_p;
-	CEnew_p = Enew_p; 
-	Cere_p = ere_p; 
-	Cfnew_str_p = fnew_str_p; 
+	CEnew_p = Enew_p;
+	Cere_p = ere_p;
+	Cfnew_str_p = fnew_str_p;
 	CEnew_str_p = Enew_str_p;
-	Cere_str_p = ere_str_p; 
-	Cepl_p = epl_p; 
+	Cere_str_p = ere_str_p;
+	Cepl_p = epl_p;
 	CEpl_p = Epl_p;
 	Cer2 = er2;
-	Cer4 = er4; 
-	Cer9 = er9; 
-	CEsec_p = Esec_p; 
+	Cer4 = er4;
+	Cer9 = er9;
+	CEsec_p = Esec_p;
 	Cer10 = er10;
 	Cea = ea;
 }
