@@ -161,11 +161,30 @@ class mixedBeamColumn2d : public Element
 
     // static data - single copy for all objects of the class
     static Matrix theMatrix;
+    static Matrix theNaturalMatrix;
+    static Matrix G;
+    static Matrix G2;
+    static Matrix H;
+    static Matrix H12;
+    static Matrix H22;
+    static Matrix Md;
+    static Matrix Kg;
+    static Matrix GT;
+    static Matrix G2T;
+    static Matrix GMHT;
+    static Matrix ks;
+    static Matrix fs;
+    static Matrix theSectionNaturalMatrix;
+
     static Vector theVector;
-    static double workArea[];
+    static Vector theNaturalVector;
+    static Vector naturalDisp;
+    static Vector naturalIncrDeltaDisp;
+    static Vector V2;
 
     // These variable are always recomputed, so there is no need to store them for each instance of the element
     static Vector *sectionDefShapeFcn;
+    static Vector *sectionForceShapeFcn;
     static Matrix *nldhat;
     static Matrix *nd1;
     static Matrix *nd2;

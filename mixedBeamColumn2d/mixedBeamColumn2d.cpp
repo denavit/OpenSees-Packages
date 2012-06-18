@@ -57,7 +57,7 @@
 #define  NDM   2                      // dimension of the problem (2d)
 #define  NND   3                      // number of nodal dof's
 #define  NEGD  6                      // number of element global dof's
-#define  NDM_SECTION  2               // number of section dof's without torsio
+#define  NDM_SECTION  2               // number of section dof's without torsion
 #define  NDM_NATURAL  3               // number of element dof's in the basic system without torsion
 #define  MAX_NUM_SECTIONS  10         // maximum number of sections allowed
 
@@ -65,10 +65,30 @@ using namespace std;
 
 
 Matrix mixedBeamColumn2d::theMatrix(NEGD,NEGD);
+Matrix mixedBeamColumn2d::theNaturalMatrix(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::theSectionNaturalMatrix(NDM_SECTION,NDM_NATURAL);
+Matrix mixedBeamColumn2d::G(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::G2(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::H(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::H12(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::H22(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::Md(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::Kg(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::GT(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::G2T(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::GMHT(NDM_NATURAL,NDM_NATURAL);
+Matrix mixedBeamColumn2d::ks(NDM_SECTION,NDM_SECTION);
+Matrix mixedBeamColumn2d::fs(NDM_SECTION,NDM_SECTION);
+
+
 Vector mixedBeamColumn2d::theVector(NEGD);
-double mixedBeamColumn2d::workArea[400];
+Vector mixedBeamColumn2d::theNaturalVector(NDM_NATURAL);
+Vector mixedBeamColumn2d::naturalDisp(NDM_NATURAL);
+Vector mixedBeamColumn2d::naturalIncrDeltaDisp(NDM_NATURAL);
+Vector mixedBeamColumn2d::V2(NDM_NATURAL);
 
 Vector *mixedBeamColumn2d::sectionDefShapeFcn = 0;
+Vector *mixedBeamColumn2d::sectionForceShapeFcn = 0;
 Matrix *mixedBeamColumn2d::nldhat = 0;
 Matrix *mixedBeamColumn2d::nd1 = 0;
 Matrix *mixedBeamColumn2d::nd2 = 0;
@@ -395,7 +415,9 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
    kvcommit.Zero();
 
    if (sectionDefShapeFcn == 0)
-     sectionDefShapeFcn  = new Vector [MAX_NUM_SECTIONS];
+     sectionDefShapeFcn = new Vector [MAX_NUM_SECTIONS];
+   if (sectionForceShapeFcn == 0)
+     sectionForceShapeFcn = new Vector [MAX_NUM_SECTIONS];
    if (nldhat == 0)
      nldhat  = new Matrix [MAX_NUM_SECTIONS];
    if (nd1 == 0)
@@ -406,7 +428,7 @@ mixedBeamColumn2d::mixedBeamColumn2d (int tag, int nodeI, int nodeJ, int numSec,
      nd1T  = new Matrix [MAX_NUM_SECTIONS];
    if (nd2T == 0)
      nd2T  = new Matrix [MAX_NUM_SECTIONS];
-   if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
+   if (!sectionDefShapeFcn || !sectionForceShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
      opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";
      exit(-1);
    }
@@ -486,9 +508,11 @@ mixedBeamColumn2d::mixedBeamColumn2d():
   kvcommit.Zero();
 
   if (sectionDefShapeFcn == 0)
-     sectionDefShapeFcn  = new Vector [MAX_NUM_SECTIONS];
+     sectionDefShapeFcn = new Vector [MAX_NUM_SECTIONS];
+  if (sectionForceShapeFcn == 0)
+     sectionForceShapeFcn = new Vector [MAX_NUM_SECTIONS];
   if (nldhat == 0)
-     nldhat  = new Matrix [MAX_NUM_SECTIONS];
+     nldhat = new Matrix [MAX_NUM_SECTIONS];
   if (nd1 == 0)
      nd1  = new Matrix [MAX_NUM_SECTIONS];
   if (nd2 == 0)
@@ -497,7 +521,7 @@ mixedBeamColumn2d::mixedBeamColumn2d():
      nd1T  = new Matrix [MAX_NUM_SECTIONS];
   if (nd2T == 0)
      nd2T  = new Matrix [MAX_NUM_SECTIONS];
-  if (!sectionDefShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
+  if (!sectionDefShapeFcn || !sectionForceShapeFcn || !nldhat || !nd1 || !nd2 || !nd1T || !nd2T ) {
     opserr << "mixedBeamColumn2d::mixedBeamColumn2d() -- failed to allocate static section arrays";
     exit(-1);
   }
@@ -733,13 +757,12 @@ int mixedBeamColumn2d::revertToStart() {
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
 
   // Vector of zeros to use at initial natural displacements
-  Vector myZeros(NDM_NATURAL);
-  myZeros.Zero();
+  theNaturalVector.Zero();
 
   // Set initial shape functions
   for ( i = 0; i < numSections; i++ ){
-    nldhat[i] = this->getNld_hat(i, myZeros, initialLength, geomLinear);
-    nd1[i] = this->getNd1(i, myZeros, initialLength, geomLinear);
+    nldhat[i] = this->getNld_hat(i, theNaturalVector, initialLength, geomLinear);
+    nd1[i] = this->getNd1(i, theNaturalVector, initialLength, geomLinear);
     nd2[i] = this->getNd2(i, 0, initialLength);
 
     for( j = 0; j < NDM_SECTION; j++ ){
@@ -751,7 +774,6 @@ int mixedBeamColumn2d::revertToStart() {
   }
 
   // Set initial and committed section flexibility and GJ
-  Matrix ks(NDM_SECTION,NDM_SECTION);
   for ( i = 0; i < numSections; i++ ){
     getSectionTangent(i,2,ks);
     invertMatrix(NDM_SECTION,ks,sectionFlexibility[i]);
@@ -767,14 +789,6 @@ int mixedBeamColumn2d::revertToStart() {
   }
 
   // Compute the following matrices: G, G2, H, H12, H22, Md, Kg
-  Matrix G(NDM_NATURAL,NDM_NATURAL);
-  Matrix G2(NDM_NATURAL,NDM_NATURAL);
-  Matrix H(NDM_NATURAL,NDM_NATURAL);
-  Matrix H12(NDM_NATURAL,NDM_NATURAL);
-  Matrix H22(NDM_NATURAL,NDM_NATURAL);
-  Matrix Md(NDM_NATURAL,NDM_NATURAL);
-  Matrix Kg(NDM_NATURAL,NDM_NATURAL);
-
   G.Zero();
   G2.Zero();
   H.Zero();
@@ -802,8 +816,6 @@ int mixedBeamColumn2d::revertToStart() {
   commitedGMH = GMH;
 
   // Compute the transposes of the following matrices: G2, GMH
-  Matrix G2T(NDM_NATURAL,NDM_NATURAL);
-  Matrix GMHT(NDM_NATURAL,NDM_NATURAL);
   for( i = 0; i < NDM_NATURAL; i++ ){
     for( j = 0; j < NDM_NATURAL; j++ ){
       G2T(i,j) = G2(j,i);
@@ -888,23 +900,16 @@ int mixedBeamColumn2d::update() {
   }
 
   // Compute the natural displacements
-  Vector naturalDisp = crdTransf->getBasicTrialDisp();
+  naturalDisp.Zero();
+  naturalDisp = crdTransf->getBasicTrialDisp();
 
-
-  Vector naturalIncrDeltaDisp(NDM_NATURAL);
+  naturalIncrDeltaDisp.Zero();
   naturalIncrDeltaDisp = naturalDisp - lastNaturalDisp;
   lastNaturalDisp = naturalDisp;
 
   // Get the numerical integration weights
   double wt[MAX_NUM_SECTIONS]; // weights of sections or gauss points of integration points
   beamIntegr->getSectionWeights(numSections, initialLength, wt);
-
-  // Define Variables
-  Vector *sectionForceShapeFcn;
-  sectionForceShapeFcn = new Vector [numSections];
-  for ( i = 0; i < numSections; i++ ) {
-    sectionForceShapeFcn[i] = Vector(NDM_SECTION);
-  }
 
   // Compute shape functions and their transposes
   for ( i = 0; i < numSections; i++ ){
@@ -951,7 +956,6 @@ int mixedBeamColumn2d::update() {
     getSectionStress(i,sectionForceFibers[i]);
 
     // Get section tangent matrix
-    Matrix ks(NDM_SECTION,NDM_SECTION);
     getSectionTangent(i,1,ks);
 
     // Compute section flexibility matrix
@@ -960,15 +964,6 @@ int mixedBeamColumn2d::update() {
   }
 
   // Compute the following matrices: V, V2, G, G2, H, H12, H22, Md, Kg
-  Vector V2(NDM_NATURAL);
-  Matrix G(NDM_NATURAL,NDM_NATURAL);
-  Matrix G2(NDM_NATURAL,NDM_NATURAL);
-  Matrix H(NDM_NATURAL,NDM_NATURAL);
-  Matrix H12(NDM_NATURAL,NDM_NATURAL);
-  Matrix H22(NDM_NATURAL,NDM_NATURAL);
-  Matrix Md(NDM_NATURAL,NDM_NATURAL);
-  Matrix Kg(NDM_NATURAL,NDM_NATURAL);
-
   V.Zero();
   V2.Zero();
   G.Zero();
@@ -1002,9 +997,6 @@ int mixedBeamColumn2d::update() {
   //GMH = G; // Omit P-small delta
 
   // Compute the transposes of the following matrices: G, G2, GMH
-  Matrix GT(NDM_NATURAL,NDM_NATURAL);
-  Matrix G2T(NDM_NATURAL,NDM_NATURAL);
-  Matrix GMHT(NDM_NATURAL,NDM_NATURAL);
   for( i = 0; i < NDM_NATURAL; i++ ) {
     for( j = 0; j < NDM_NATURAL; j++ ) {
       GT(i,j) = G(j,i);
@@ -1369,8 +1361,6 @@ int mixedBeamColumn2d::getResponse(int responseID, Information &eleInfo) {
     Vector tempVector(2*numSections);
     Vector sectionForce(NDM_SECTION);
     Vector plasticSectionDef(NDM_SECTION);
-    Matrix ks(NDM_SECTION,NDM_SECTION);
-    Matrix fs(NDM_SECTION,NDM_SECTION);
     tempVector.Zero();
     for ( i = 0; i < numSections; i++ ){
 
@@ -1464,21 +1454,18 @@ mixedBeamColumn2d::getKg(int sec, double P, double L) {
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, A, B;
-
   x = L*xi[sec];
   A = 1 - 4*(x/L) + 3*pow(x/L,2);
   B =   - 2*(x/L) + 3*pow(x/L,2);
 
-  Matrix kg(NDM_NATURAL,NDM_NATURAL);
-  kg.Zero();
+  theNaturalMatrix.Zero();
+  theNaturalMatrix(0,0) = P / ( L * L );
+  theNaturalMatrix(1,1) = P*A*A;
+  theNaturalMatrix(2,2) = P*B*B;
+  theNaturalMatrix(1,2) = P*A*B;
+  theNaturalMatrix(2,1) = P*A*B;
 
-  kg(0,0) = P / ( L * L );
-  kg(1,1) = P*A*A;
-  kg(2,2) = P*B*B;
-  kg(1,2) = P*A*B;
-  kg(2,1) = P*A*B;
-
-  return kg;
+  return theNaturalMatrix;
 }
 
 Matrix mixedBeamColumn2d::getMd(int sec, Vector dShapeFcn, Vector dFibers, double L) {
@@ -1486,18 +1473,15 @@ Matrix mixedBeamColumn2d::getMd(int sec, Vector dShapeFcn, Vector dFibers, doubl
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, A, B;
-
-  Matrix md(NDM_NATURAL,NDM_NATURAL);
-  md.Zero();
-
   x = L*xi[sec];
   A =  ( x/L - 2*pow(x/L,2) + pow(x/L,3) )*L;
   B =          (-pow(x/L,2) + pow(x/L,3) )*L;
 
-  md(0,1) = A * ( dShapeFcn(1) - dFibers(1) );
-  md(0,2) = B * ( dShapeFcn(1) - dFibers(1) );
+  theNaturalMatrix.Zero();
+  theNaturalMatrix(0,1) = A * ( dShapeFcn(1) - dFibers(1) );
+  theNaturalMatrix(0,2) = B * ( dShapeFcn(1) - dFibers(1) );
 
-  return md;
+  return theNaturalMatrix;
 }
 
 Matrix mixedBeamColumn2d::getNld_hat(int sec, const Vector &v, double L, bool geomLinear) {
@@ -1505,35 +1489,29 @@ Matrix mixedBeamColumn2d::getNld_hat(int sec, const Vector &v, double L, bool ge
   beamIntegr->getSectionLocations(numSections, L, xi);
 
   double x, C, E, F;
-  Matrix Nld_hat(NDM_SECTION,NDM_NATURAL);
-  Nld_hat.Zero();
 
   x = L*xi[sec];
-
   C =  1/L;
   E = -4/L + 6*x/(L*L);
   F = -2/L + 6*x/(L*L);
 
+  theSectionNaturalMatrix.Zero();
   if (geomLinear) {
-
-    Nld_hat(0,0) = C;
-    Nld_hat(1,1) = E;
-    Nld_hat(1,2) = F;
-
+    theSectionNaturalMatrix(0,0) = C;
+    theSectionNaturalMatrix(1,1) = E;
+    theSectionNaturalMatrix(1,2) = F;
   } else {
-
     double A,B;
     A = 1 - 4 * ( x / L ) + 3 * pow ( ( x / L ) , 2 );
     B = - 2 * ( x / L ) + 3 * pow ( ( x / L ) , 2 );
-    Nld_hat(0,0) = C + C*C*v(0);
-    Nld_hat(0,1) = A*A*v(1) + A*B*v(2);
-    Nld_hat(0,2) = A*B*v(1) + B*B*v(2);
-    Nld_hat(1,1) = E;
-    Nld_hat(1,2) = F;
-
+    theSectionNaturalMatrix(0,0) = C + C*C*v(0);
+    theSectionNaturalMatrix(0,1) = A*A*v(1) + A*B*v(2);
+    theSectionNaturalMatrix(0,2) = A*B*v(1) + B*B*v(2);
+    theSectionNaturalMatrix(1,1) = E;
+    theSectionNaturalMatrix(1,2) = F;
   }
 
-  return Nld_hat;
+  return theSectionNaturalMatrix;
 }
 
 Matrix
@@ -1544,17 +1522,14 @@ mixedBeamColumn2d::getNd2(int sec, double P, double L){
    double x, A, B;
 
    x = L * xi[sec];
-
-   Matrix Nd2(NDM_SECTION,NDM_NATURAL);
-   Nd2.Zero();
-
    A = L * ( x / L - 2 * pow( x / L, 2 ) + pow( x / L, 3 ) );
    B = L * ( -pow( x / L, 2 ) + pow( x / L, 3 ) );
 
-   Nd2(1,1) = P * A;
-   Nd2(1,2) = P * B;
+   theSectionNaturalMatrix.Zero();
+   theSectionNaturalMatrix(1,1) = P * A;
+   theSectionNaturalMatrix(1,2) = P * B;
 
-   return Nd2;
+   return theSectionNaturalMatrix;
 }
 
 
@@ -1565,28 +1540,23 @@ mixedBeamColumn2d::getNd1(int sec, const Vector &v, double L, bool geomLinear){
 
    double x = L * xi[sec];
 
-   Matrix Nd1(NDM_SECTION,NDM_NATURAL);
-   Nd1.Zero();
-
+   theSectionNaturalMatrix.Zero();
    if (geomLinear) {
-
-     Nd1(0,0) = 1.0;
-     Nd1(1,1) = -x/L + 1.0;
-     Nd1(1,2) =  x/L;
-
+     theSectionNaturalMatrix(0,0) = 1.0;
+     theSectionNaturalMatrix(1,1) = -x/L + 1.0;
+     theSectionNaturalMatrix(1,2) =  x/L;
    } else {
-
      double A;
      A = L * ( x/L - 2*pow(x/L,2) + pow(x/L,3) ) * v[1]
               + L * ( -pow(x/L,2) + pow(x/L,3) ) * v[2];
 
-     Nd1(0,0) = 1.0;
-     Nd1(1,0) = A;
-     Nd1(1,1) = -x/L + 1.0;
-     Nd1(1,2) =  x/L;
+     theSectionNaturalMatrix(0,0) = 1.0;
+     theSectionNaturalMatrix(1,0) = A;
+     theSectionNaturalMatrix(1,1) = -x/L + 1.0;
+     theSectionNaturalMatrix(1,2) =  x/L;
    }
 
-   return Nd1;
+   return theSectionNaturalMatrix;
 }
 
 
