@@ -1279,6 +1279,20 @@ Response* mixedBeamColumn2d::setResponse(const char **argv, int argc,
 
     theResponse =  new ElementResponse(this, 5, Vector(2*numSections));
 
+  } else if (strcmp(argv[0],"sectionStiffness") == 0) {
+
+    int i;
+    char *q  = new char[15];
+    for ( i = 0; i < numSections; i++ ){
+      sprintf(q,"sectionStiffness_EA_%i",i+1);
+      output.tag("ResponseType",q);
+      sprintf(q,"sectionStiffness_EI_%i",i+1);
+      output.tag("ResponseType",q);
+    }
+    delete [] q;
+
+    theResponse =  new ElementResponse(this, 6, Vector(2*numSections));
+
   } else if (strcmp(argv[0],"integrationPoints") == 0) {
     theResponse =  new ElementResponse(this, 100, Vector(numSections));
 
@@ -1372,6 +1386,19 @@ int mixedBeamColumn2d::getResponse(int responseID, Information &eleInfo) {
 
       tempVector(2*i)   = plasticSectionDef(0);
       tempVector(2*i+1) = plasticSectionDef(1);
+    }
+
+    return eleInfo.setVector(tempVector);
+
+  } else if (responseID == 6) { // section stiffness (EA and EI)
+
+    int i;
+    Vector tempVector(2*numSections);
+    tempVector.Zero();
+    for ( i = 0; i < numSections; i++ ){
+      getSectionTangent(i,1,ks);
+      tempVector(2*i)   = ks(0,0); // EA
+      tempVector(2*i+1) = ks(1,1); // EI
     }
 
     return eleInfo.setVector(tempVector);

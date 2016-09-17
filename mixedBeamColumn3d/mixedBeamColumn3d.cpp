@@ -60,6 +60,7 @@
 #define  NDM_SECTION  3                // number of section dof's without torsion
 #define  NDM_NATURAL  5                // number of element dof's in the basic system without torsion
 #define  NDM_NATURAL_WITH_TORSION  6   // number of element dof's in the basic system with torsion
+#define  MAX_NUM_SECTIONS  10          // maximum number of sections allowed
 
 using namespace std;
 
@@ -1392,6 +1393,50 @@ Response* mixedBeamColumn3d::setResponse(const char **argv, int argc,
     output.tag("ResponseType","T");
 
     theResponse = new ElementResponse(this, 3, Vector(6));
+  } else if (strcmp(argv[0],"sectionDeformation_Force") == 0) {
+
+    int i;
+    char *q  = new char[15];
+    for ( i = 0; i < numSections; i++ ){
+      sprintf(q,"axialStrain_%i",i+1);
+      output.tag("ResponseType",q);
+      sprintf(q,"curvatureZ_%i",i+1);
+      output.tag("ResponseType",q);
+      sprintf(q,"curvatureY_%i",i+1);
+      output.tag("ResponseType",q);
+    }
+    delete [] q;
+
+    theResponse =  new ElementResponse(this, 4, Vector(3*numSections));
+
+  } else if (strcmp(argv[0],"plasticSectionDeformation_Force") == 0) {
+
+    int i;
+    char *q  = new char[25];
+    for ( i = 0; i < numSections; i++ ){
+      sprintf(q,"plasticAxialStrain_%i",i+1);
+      output.tag("ResponseType",q);
+      sprintf(q,"plasticCurvatureZ_%i",i+1);
+      output.tag("ResponseType",q);
+      sprintf(q,"plasticCurvatureY_%i",i+1);
+      output.tag("ResponseType",q);
+    }
+    delete [] q;
+
+    theResponse =  new ElementResponse(this, 5, Vector(3*numSections));
+
+  } else if (strcmp(argv[0],"integrationPoints") == 0) {
+    theResponse =  new ElementResponse(this, 100, Vector(numSections));
+
+  } else if (strcmp(argv[0],"integrationWeights") == 0) {
+    theResponse =  new ElementResponse(this, 101, Vector(numSections));
+
+  } else if (strcmp(argv[0],"connectedNodes") == 0) {
+    theResponse =  new ElementResponse(this, 102, Vector(2));
+
+  } else if (strcmp(argv[0],"numSections") == 0 ||
+             strcmp(argv[0],"numberOfSections") == 0 ) {
+    theResponse =  new ElementResponse(this, 103, Vector(1));
 
   } else if (strcmp(argv[0],"section") ==0) {
     if (argc > 2) {
@@ -1457,6 +1502,74 @@ int mixedBeamColumn3d::getResponse(int responseID, Information &eleInfo) {
 
   } else if (responseID == 3) { // basic forces
     return eleInfo.setVector(internalForceOpenSees);
+
+  } else if (responseID == 4) { // section deformation (from forces)
+
+    int i;
+    Vector tempVector(3*numSections);
+    tempVector.Zero();
+    for ( i = 0; i < numSections; i++ ){
+      tempVector(3*i)   = sectionDefFibers[i](0);
+      tempVector(3*i+1) = sectionDefFibers[i](1);
+      tempVector(3*i+2) = sectionDefFibers[i](2);
+    }
+
+    return eleInfo.setVector(tempVector);
+
+  } else if (responseID == 5) { // plastic section deformation (from forces)
+
+    int i;
+    Vector tempVector(3*numSections);
+    Vector sectionForce(NDM_SECTION);
+    Vector plasticSectionDef(NDM_SECTION);
+    Matrix ks(3,3);
+    Matrix fs(3,3);
+    tempVector.Zero();
+    double scratch = 0.0;
+    for ( i = 0; i < numSections; i++ ){
+
+      getSectionStress(i,sectionForce,scratch);
+      getSectionTangent(i,2,ks,scratch);
+      invertMatrix(NDM_SECTION,ks,fs);
+
+      plasticSectionDef = sectionDefFibers[i] - fs*sectionForce;
+
+      tempVector(3*i)   = plasticSectionDef(0);
+      tempVector(3*i+1) = plasticSectionDef(1);
+      tempVector(3*i+2) = plasticSectionDef(2);
+    }
+
+    return eleInfo.setVector(tempVector);
+
+  } else if (responseID == 100) { // integration points
+
+    double L = crdTransf->getInitialLength();
+    double pts[MAX_NUM_SECTIONS];
+    beamIntegr->getSectionLocations(numSections, L, pts);
+    Vector locs(numSections);
+    for (int i = 0; i < numSections; i++)
+      locs(i) = pts[i]*L;
+    return eleInfo.setVector(locs);
+
+  } else if (responseID == 101) { // integration weights
+      double L = crdTransf->getInitialLength();
+      double wts[MAX_NUM_SECTIONS];
+      beamIntegr->getSectionWeights(numSections, L, wts);
+      Vector weights(numSections);
+      for (int i = 0; i < numSections; i++)
+        weights(i) = wts[i]*L;
+      return eleInfo.setVector(weights);
+
+  } else if (responseID == 102) { // connected nodes
+    Vector tempVector(2);
+    tempVector(0) = connectedExternalNodes(0);
+    tempVector(1) = connectedExternalNodes(1);
+    return eleInfo.setVector(tempVector);
+
+  } else if (responseID == 103) { // number of sections
+    Vector tempVector(1);
+    tempVector(0) = numSections;
+    return eleInfo.setVector(tempVector);
 
   } else {
     return -1;
