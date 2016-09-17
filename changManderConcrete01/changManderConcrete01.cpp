@@ -1400,7 +1400,9 @@ int
 changManderConcrete01::sendSelf(int cTag, Channel &theChannel)
 {
   int res = 0;
+
   static Vector data(106);
+
   data(0) = this->getTag();
   data(1) = Fc_n;
   data(2) = ec_n;
@@ -1529,8 +1531,10 @@ changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
 				 FEM_ObjectBroker &theBroker)
 {
   int res = 0;
-  static Vector data(6);
+
+  static Vector data(106);
   res = theChannel.recvVector(this->getDbTag(), cTag, data);
+
   if (res < 0)
     opserr << "changManderConcrete01::recvSelf() - failed to recv data\n";
   else {
