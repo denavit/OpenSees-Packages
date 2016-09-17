@@ -36,7 +36,7 @@
 class multiSurfaceKinematicHardening : public UniaxialMaterial
 {
   public:
-    multiSurfaceKinematicHardening(int tag, double iE, int iNumSurfaces, double iCenters[], double iRadii[], double iHardeningModulii[]);
+    multiSurfaceKinematicHardening(int tag, double iE, int iNumSurfaces, double iCenters[], double iRadii[], double iHardeningModulii[], double iSigma0);
     multiSurfaceKinematicHardening();
 
     ~multiSurfaceKinematicHardening();
@@ -67,6 +67,7 @@ class multiSurfaceKinematicHardening : public UniaxialMaterial
 
     int numSurfaces; // Number of Surfaced
     double E; // Elastic Modulus
+    double initStress; // initial stress (for residual stress)
 
     double trialStrain, committedStrain;
     double trialStress, committedStress;

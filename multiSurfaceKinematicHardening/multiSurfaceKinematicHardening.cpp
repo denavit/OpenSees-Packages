@@ -74,7 +74,9 @@ OPS_multiSurfaceKinematicHardening()
 
   int tag;
   double E;
+  double sigma0 = 0.0;
   int numSurfaces;
+  double dData2[10];
   double * dData;
   double * startCenters;
   double * radii;
@@ -82,7 +84,7 @@ OPS_multiSurfaceKinematicHardening()
 
   numData = 1;
   if (OPS_GetIntInput(&numData, &tag) != 0) {
-    opserr << "WARNING invalid uniaxialMaterial multiSurfaceKinematicHardening tag \n" << endln;
+    opserr << "WARNING invalid uniaxialMaterial multiSurfaceKinematicHardening tag \n";
     return 0;
   }
 
@@ -90,6 +92,21 @@ OPS_multiSurfaceKinematicHardening()
   if ( OPS_GetString(sData, sDataLength) != 0 ) {
     opserr << "WARNING invalid input";
     return 0;
+  }
+
+  if ( strcmp(sData,"-initialStress") == 0 ) {
+    numData = 1;
+    if (OPS_GetDoubleInput(&numData, dData2) != 0) {
+      opserr << "WARNING invalid input, want: -initialStress $sigma0 \n";
+      return 0;
+    }
+    sigma0 = dData2[0];
+
+    // Get the next string
+    if ( OPS_GetString(sData, sDataLength) != 0 ) {
+      opserr << "WARNING invalid input";
+      return 0;
+    }
   }
 
   if ( strcmp(sData,"-Direct") == 0 ) {
@@ -196,7 +213,7 @@ OPS_multiSurfaceKinematicHardening()
 
 
   // Create material
-  theMaterial = new multiSurfaceKinematicHardening(tag, E, numSurfaces, startCenters, radii, hardeningModulii);
+  theMaterial = new multiSurfaceKinematicHardening(tag, E, numSurfaces, startCenters, radii, hardeningModulii, sigma0);
 
   if (theMaterial == 0) {
     opserr << "WARNING could not create uniaxialMaterial of type multiSurfaceKinematicHardening\n";
@@ -214,9 +231,9 @@ OPS_multiSurfaceKinematicHardening()
 
 
 
-multiSurfaceKinematicHardening::multiSurfaceKinematicHardening(int tag, double iE, int iNumSurfaces, double iCenters[], double iRadii[], double iHardeningModulii[])
+multiSurfaceKinematicHardening::multiSurfaceKinematicHardening(int tag, double iE, int iNumSurfaces, double iCenters[], double iRadii[], double iHardeningModulii[], double iSigma0)
 :UniaxialMaterial(tag,MAT_TAG_multiSurfaceKinematicHardening),
- E(iE), numSurfaces(iNumSurfaces)
+ E(iE), numSurfaces(iNumSurfaces), initStress(iSigma0)
 {
   // Check input data
   if ( E <= 0.0 ) {
@@ -227,7 +244,7 @@ multiSurfaceKinematicHardening::multiSurfaceKinematicHardening(int tag, double i
 
   if ( numSurfaces < 1 ) {
     opserr << "multiSurfaceKinematicHardening::multiSurfaceKinematicHardening()\n";
-    opserr << "The number of surfaces must be greater than zero!\n";
+    opserr << "The number of surfaces must be greater than zero! "<<numSurfaces<<"\n";
     exit(-1);
   }
 
@@ -280,6 +297,13 @@ multiSurfaceKinematicHardening::multiSurfaceKinematicHardening(int tag, double i
         exit(-1);
       }
     }
+
+    // Check Initial Stress
+    if ( (initStress < startCenters[0]-radii[0]) || (initStress > startCenters[0]+radii[0])  ) {
+      opserr << "multiSurfaceKinematicHardening::multiSurfaceKinematicHardening()\n";
+      opserr << "initStress is outside of the elastic range!\n";
+      exit(-1);
+    }
   }
 
   // Set Remaining Variables
@@ -315,8 +339,12 @@ int multiSurfaceKinematicHardening::setTrialStrain(double strain, double strainR
 	// Define trial strain and strain increment
 	int activeSurface;
 	double strain_incr, yieldStress;
-	trialStrain = strain;
-	strain_incr = trialStrain - committedStrain;
+  if ( initStress == 0) {
+    trialStrain = strain;
+  } else {
+    trialStrain = strain + initStress/E;
+  }
+  strain_incr = trialStrain - committedStrain;
 
 	if ( strain_incr > 0 ) {
 	  // Moving in the tensile direction
@@ -417,7 +445,11 @@ double multiSurfaceKinematicHardening::tangentModulus(int activeSurface) {
 }
 
 double multiSurfaceKinematicHardening::getStrain(void) {
-  return trialStrain;
+  if (initStress == 0.0) {
+    return trialStrain;
+  } else {
+    return trialStrain - initStress/E;
+  }
 }
 
 double multiSurfaceKinematicHardening::getStress(void) {
@@ -459,9 +491,9 @@ int multiSurfaceKinematicHardening::revertToLastCommit(void) {
 
 
 int multiSurfaceKinematicHardening::revertToStart(void) {
-  trialStrain = 0.0;
-  trialStress = 0.0;
   trialTangent = E;
+  trialStress = initStress;
+  trialStrain = initStress/E;
 
   for (int i=0; i<numSurfaces; i++) {
     trialCenters[i] = startCenters[i];
@@ -473,7 +505,7 @@ int multiSurfaceKinematicHardening::revertToStart(void) {
 
 
 UniaxialMaterial * multiSurfaceKinematicHardening::getCopy(void) {
-  multiSurfaceKinematicHardening *theCopy = new multiSurfaceKinematicHardening(this->getTag(), E, numSurfaces, startCenters, radii, hardeningModulii);
+  multiSurfaceKinematicHardening *theCopy = new multiSurfaceKinematicHardening(this->getTag(), E, numSurfaces, startCenters, radii, hardeningModulii, initStress);
 
   theCopy->trialStrain = this->trialStrain;
   theCopy->committedStrain = this->committedStrain;
@@ -481,7 +513,6 @@ UniaxialMaterial * multiSurfaceKinematicHardening::getCopy(void) {
   theCopy->committedStress = this->committedStress;
   theCopy->trialTangent = this->trialTangent;
   theCopy->committedTangent = this->committedTangent;
-
 
   for (int i=0; i<numSurfaces; i++) {
     theCopy->trialCenters[i] = this->trialCenters[i];
@@ -527,11 +558,12 @@ int multiSurfaceKinematicHardening::recvSelf(int cTag, Channel &theChannel, FEM_
 }
 
 void multiSurfaceKinematicHardening::Print(OPS_Stream &s, int flag) {
-	s<<"multiSurfaceKinematicHardening, tag: "<<this->getTag()<<endln;
-	s<<" E: "<<E<<endln;
-	s<<" Number of Surfaces: "<<numSurfaces<<endln;
+	s<<"multiSurfaceKinematicHardening, tag: "<<this->getTag()<<"\n";
+	s<<" E: "<<E<<"\n";
+	s<<" Initial Stress: "<<initStress<<"\n";
+	s<<" Number of Surfaces: "<<numSurfaces<<"\n";
 	for (int i=0; i<numSurfaces; i++) {
-    s<<"    #"<<i+1<<" Center = "<<startCenters[i]<<" Radius = "<<radii[i]<<" Hardening Modulus = "<<hardeningModulii[i]<<endln;
+    s<<"    #"<<i+1<<" Center = "<<startCenters[i]<<" Radius = "<<radii[i]<<" Hardening Modulus = "<<hardeningModulii[i]<<"\n";
   }
 	return;
 }
