@@ -887,10 +887,10 @@ int shenSteel01::setTrialStrain(double strain, double strainRate) {
   }
 
   // Make sure the loading surface is not bigger than the bounding surface
-  if ( Tls_p > Tbs_p )
-    Tls_p = Tbs_p;
-  if ( Tls_n < Tbs_n )
-    Tls_n = Tbs_n;
+  if ( Tls_p > Epo * ep + Tbs_p )
+    Tls_p = Epo * ep + Tbs_p;
+  if ( Tls_n < Epo * ep + Tbs_n )
+    Tls_n = Epo * ep + Tbs_n;
 
   // Maximum Stress Seen by the Material
   if( fabs(trialStress-Epo*ep) > Cmax_strs )
@@ -1115,7 +1115,7 @@ int shenSteel01::revertToLastCommit(void) {
 
 int shenSteel01::revertToStart(void) {
   // State Variables
-  trialTangent = Ee;;
+  trialTangent = Ee;
   trialStress = initStress;
   trialStrain = initStress/Ee;
 
