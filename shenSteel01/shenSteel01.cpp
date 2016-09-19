@@ -176,7 +176,7 @@ OPS_Export void *OPS_shenSteel01() {
 
   // Loop through remaining arguments
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
-    if ( OPS_GetString(sData, sDataLength) != 0 ) {
+    if ( OPS_GetStringCopy(&sData) != 0 ) {
       opserr << "WARNING invalid input";
       return 0;
     }
@@ -238,7 +238,7 @@ OPS_Export void *OPS_shenSteel01() {
         return 0;
       }
       elb = dData[0];  Ksft = dData[1];  alphaFulb = dData[2];
-      if ( OPS_GetString(sData, sDataLength) != 0 ) {
+      if ( OPS_GetStringCopy(&sData) != 0 ) {
         opserr << "WARNING invalid input";
         return 0;
       }

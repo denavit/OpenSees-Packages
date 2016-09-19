@@ -82,7 +82,7 @@ OPS_ratchet()
   }
 
 
-  if ( OPS_GetString(sData, sDataLength) != 0 ) {
+  if ( OPS_GetStringCopy(&sData) != 0 ) {
     opserr << "WARNING invalid input";
     return 0;
   }

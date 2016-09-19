@@ -145,7 +145,7 @@ OPS_changManderConcrete01()
 
   // Loop through remaining arguments
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
-	  if ( OPS_GetString(sData, sDataLength) != 0 ) {
+	  if ( OPS_GetStringCopy(&sData) != 0 ) {
 		  opserr << "WARNING invalid input \n";
 		  return 0;
 	  }

@@ -198,7 +198,7 @@ OPS_Export void * OPS_mixedBeamColumn3d() {
 
   // Loop through remaining arguments to get optional input
   while ( OPS_GetNumRemainingInputArgs() > 0 ) {
-    if ( OPS_GetString(sData, sDataLength) != 0 ) {
+    if ( OPS_GetStringCopy(&sData) != 0 ) {
       opserr << "WARNING invalid input";
       return 0;
     }
@@ -212,7 +212,7 @@ OPS_Export void * OPS_mixedBeamColumn3d() {
       massDens = dData[0];
 
     } else if ( strcmp(sData,"-integration") == 0 ) {
-      if ( OPS_GetString(sData2, sDataLength) != 0 ) {
+      if ( OPS_GetStringCopy(&sData2) != 0 ) {
         opserr << "WARNING invalid input, want: -integration $intType";
         return 0;
       }
