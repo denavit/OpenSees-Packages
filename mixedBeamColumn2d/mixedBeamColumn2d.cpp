@@ -199,7 +199,7 @@ OPS_Export void * OPS_mixedBeamColumn2d() {
     sections[i] = theSection;
 
   // Get the coordinate transformation
-  CrdTransf *theTransf = OPS_GetCrdTransfPtr(transfTag);
+  CrdTransf *theTransf = OPS_GetCrdTransf(transfTag);
   if (theTransf == 0) {
     opserr << "WARNING geometric transformation with tag " << transfTag << "not found for element " << eleTag << endln;
     return 0;
