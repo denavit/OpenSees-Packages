@@ -529,14 +529,27 @@ int sakinoSunConcrete04::recvSelf (int commitTag, Channel& theChannel,
 
 void sakinoSunConcrete04::Print (OPS_Stream& s, int flag)
 {
-  s << "sakinoSunConcrete04, tag: " << this->getTag() << endln;
-  s << "  fpc: " << fpc << endln;
-  s << "  epsc0: " << epsc0 << endln;
-  s << "  fct: " << fct << endln;
-  s << "  w: " << w << endln;
-  s << "  Ec0:  " << Ec0 << endln;
-  s << "  etu:  " << etu << endln;
-  s << "  beta: " << beta << endln;
+  if (flag == OPS_PRINT_PRINTMODEL_MATERIAL) {
+    s << "sakinoSunConcrete04, tag: " << this->getTag() << endln;
+    s << "  fpc: " << fpc << endln;
+    s << "  epsc0: " << epsc0 << endln;
+    s << "  fct: " << fct << endln;
+    s << "  w: " << w << endln;
+    s << "  Ec0:  " << Ec0 << endln;
+    s << "  etu:  " << etu << endln;
+    s << "  beta: " << beta << endln;
+  } else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+    s << "\t\t\t{";
+    s << "\"name\": \"" << this->getTag() << "\", ";
+    s << "\"type\": \"sakinoSunConcrete04\", ";
+    s << "\"fpc\": " << fpc << ", ";
+    s << "\"epsc0\": " << epsc0 << ", ";
+    s << "\"fct\": " << fct << ", ";
+    s << "\"w\": " << w << ", ";
+    s << "\"Ec0\": " << Ec0 << ", ";
+    s << "\"etu\": " << etu << ", ";
+    s << "\"beta\": " << beta << "}";
+  }
 }
 
 int

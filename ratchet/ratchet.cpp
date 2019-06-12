@@ -259,9 +259,17 @@ int ratchet::recvSelf(int cTag, Channel &theChannel, FEM_ObjectBroker &theBroker
 }
 
 void ratchet::Print(OPS_Stream &s, int flag) {
-	s<<"ratchet, tag: "<<this->getTag()<<endln;
-	s<<" Forward Direction: "<<direction<<endln;
-	s<<" E: "<<E<<endln;
+  if (flag == OPS_PRINT_PRINTMODEL_MATERIAL) {
+    s<<"ratchet, tag: "<<this->getTag()<<endln;
+    s<<" Forward Direction: "<<direction<<endln;
+    s<<" E: "<<E<<endln;
+  } else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+    s << "\t\t\t{";
+    s << "\"name\": \"" << this->getTag() << "\", ";
+		s << "\"type\": \"ratchet\", ";
+    s << "\"direction\": " << direction << ", ";
+    s << "\"E\": " << E << "}";
+  }
 	return;
 }
 
