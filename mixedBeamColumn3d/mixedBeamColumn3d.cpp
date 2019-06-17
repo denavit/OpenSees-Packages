@@ -1322,8 +1322,10 @@ void mixedBeamColumn3d::Print(OPS_Stream &s, int flag) {
     s << "\"integration\": ";
     beamIntegr->Print(s, flag);
     s << ", \"massperlength\": " << rho << ", ";
-    s << "\"crdTransformation\": \"" << crdTransf->getTag() << "\", ";
-    s << "\"geomLinear\": " << geomLinear << "}";
+    s << "\"crdTransformation\": \"" << crdTransf->getTag() << "\"";
+    if (geomLinear)
+      s << ", \"geomLinear\": true";
+    s << "}";
 
   } else {
     s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn3d ";
