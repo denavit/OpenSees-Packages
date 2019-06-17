@@ -1197,6 +1197,8 @@ void mixedBeamColumn2d::Print(OPS_Stream &s, int flag) {
     beamIntegr->Print(s, flag);
     s << ", \"massperlength\": " << rho << ", ";
     s << "\"crdTransformation\": \"" << crdTransf->getTag() << "\"";
+    if (not doRayleigh)
+      s << ", \"doRayleigh\": false";
     if (geomLinear)
       s << ", \"geomLinear\": true";
     s << "}";
