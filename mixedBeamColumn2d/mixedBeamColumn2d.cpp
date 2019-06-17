@@ -1184,6 +1184,21 @@ void mixedBeamColumn2d::Print(OPS_Stream &s, int flag) {
     for (int i = 0; i < numSections; i++)
       s << "\n"<<i<<" "<<xi[i]<<" "<<wt[i];
 
+  } else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+    s << "\t\t\t{";
+    s << "\"name\": " << this->getTag() << ", ";
+    s << "\"type\": \"mixedBeamColumn2d\", ";
+    s << "\"nodes\": [" << connectedExternalNodes(0) << ", " << connectedExternalNodes(1) << "], ";
+    s << "\"sections\": [";
+    for (int i = 0; i < numSections - 1; i++)
+      s << "\"" << sections[i]->getTag() << "\", ";
+    s << "\"" << sections[numSections - 1]->getTag() << "\"], ";
+    s << "\"integration\": ";
+    beamIntegr->Print(s, flag);
+    s << ", \"massperlength\": " << rho << ", ";
+    s << "\"crdTransformation\": \"" << crdTransf->getTag() << "\", ";
+    s << "\"geomLinear\": " << geomLinear << "}";
+
   } else {
     s << "\nElement: " << this->getTag() << " Type: mixedBeamColumn2d ";
     s << "\tConnected Nodes: " << connectedExternalNodes ;
