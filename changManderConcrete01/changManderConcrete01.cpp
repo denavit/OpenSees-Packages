@@ -1662,17 +1662,33 @@ changManderConcrete01::recvSelf(int cTag, Channel &theChannel,
 void
 changManderConcrete01::Print(OPS_Stream &s, int flag)
 {
-	s<<"changManderConcrete01, tag: "<<this->getTag()<<endln;
-	s<<" Ec:      "<<Ec<<endln;
-	s<<" Fcn:     "<<Fc_n<<endln;
-	s<<" ecn:     "<<ec_n<<endln;
-	s<<" rn_pre:  "<<r_n_pre<<endln;
-	s<<" rn_post: "<<r_n_post<<endln;
-	s<<" xcrn:    "<<x_n_cr<<endln;
-	s<<" Fcp:     "<<Fc_p<<endln;
-	s<<" ecp:     "<<ec_p<<endln;
-	s<<" rp:      "<<r_p<<endln;
-	s<<" xcrp:    "<<x_p_cr<<endln;
+	if (flag == OPS_PRINT_PRINTMODEL_MATERIAL) {
+		s<<"changManderConcrete01, tag: "<<this->getTag()<<endln;
+		s<<" Ec:      "<<Ec<<endln;
+		s<<" Fcn:     "<<Fc_n<<endln;
+		s<<" ecn:     "<<ec_n<<endln;
+		s<<" rn_pre:  "<<r_n_pre<<endln;
+		s<<" rn_post: "<<r_n_post<<endln;
+		s<<" xcrn:    "<<x_n_cr<<endln;
+		s<<" Fcp:     "<<Fc_p<<endln;
+		s<<" ecp:     "<<ec_p<<endln;
+		s<<" rp:      "<<r_p<<endln;
+		s<<" xcrp:    "<<x_p_cr<<endln;
+	} else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+		s << "\t\t\t{";
+		s << "\"name\": \"" << this->getTag() << "\", ";
+		s << "\"type\": \"changManderConcrete01\", ";
+		s << "\"Ec\": " << Ec << ", ";
+		s << "\"Fcn\": " << Fc_n << ", ";
+		s << "\"ecn\": " << ec_n << ", ";
+		s << "\"rn_pre\": " << r_n_pre << ", ";
+		s << "\"rn_post\": " << r_n_post << ", ";
+		s << "\"xcrn\": " << x_n_cr << ", ";
+		s << "\"Fcp\": " << Fc_p << ", ";
+		s << "\"ecp\": " << ec_p << ", ";
+		s << "\"rp\": " << r_p << ", ";
+		s << "\"xcrp\": " << x_p_cr << "}";
+	}
 	return;
 }
 

@@ -1318,22 +1318,57 @@ int shenSteel01::recvSelf(int cTag, Channel &theChannel,
 }
 
 void shenSteel01::Print(OPS_Stream &s, int flag) {
-  s<<"shenSteel01, tag: "<<this->getTag()<<endln;
-  s<<" Es:      "<<Ee<<endln;
-  s<<" Fy:      "<<fy<<endln;
-  s<<" Fu:      "<<fu<<endln;
-  s<<" eu:      "<<eu<<endln;
-  s<<" kappaBar0: "<<Rbso<<" Ep0i: "<<Epoi<<" alpha: "<<alfa<<" a: "<<a<<" b: "<<bb<<" c: "<<c<<" omega: "<<w<<" zeta: "<<ksi<<" e: "<<e<<" f: "<<fE<< endln;
-  s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<<" Epst: "<<Est<< endln;
-  if (modelYieldPlateau == true)
-    s<<" modelYieldPlateau: true   M: "<<M<<" epst: "<<est<< endln;
-  if (modelLocalBuckling == true)
-    s<<" modelLocalBuckling: true  localBucklingStrain: "<<localBucklingStrain<<" Ksft: "<<Ksft<<" alphaFulb: "<<alphaFulb<<" refFulb: "<<refFulb<< endln;
-  if (modelDegradeEp == true)
-    s<<" modelDegradeEp: true      degradeEpRate: "<<degradeEpRate<<" degradeEpLimit: "<<degradeEpLimit<< endln;
-  if (modelDegradeKappa == true)
-    s<<" modelDegradeKappa: true   degradeKappaRate: "<<degradeKappaRate<<" degradeKappaLimit: "<<degradeKappaLimit<< endln;
-  if (modelDegradeFulb == true)
-    s<<" modelDegradeFulb: true    degradeFulbRate: "<<degradeFulbRate<<" degradeFulbLimit: "<<degradeFulbLimit<< endln;
+  if (flag == OPS_PRINT_PRINTMODEL_MATERIAL) {
+    s<<"shenSteel01, tag: "<<this->getTag()<<endln;
+    s<<" Es:      "<<Ee<<endln;
+    s<<" Fy:      "<<fy<<endln;
+    s<<" Fu:      "<<fu<<endln;
+    s<<" eu:      "<<eu<<endln;
+    s<<" kappaBar0: "<<Rbso<<" Ep0i: "<<Epoi<<" alpha: "<<alfa<<" a: "<<a<<" b: "<<bb<<" c: "<<c<<" omega: "<<w<<" zeta: "<<ksi<<" e: "<<e<<" f: "<<fE<< endln;
+    s<<" initStress: "<<initStress<<" alphaLat: "<<alphaLat<<" ep0: "<<ep0<<" Epst: "<<Est<< endln;
+    if (modelYieldPlateau == true)
+      s<<" modelYieldPlateau: true   M: "<<M<<" epst: "<<est<< endln;
+    if (modelLocalBuckling == true)
+      s<<" modelLocalBuckling: true  localBucklingStrain: "<<localBucklingStrain<<" Ksft: "<<Ksft<<" alphaFulb: "<<alphaFulb<<" refFulb: "<<refFulb<< endln;
+    if (modelDegradeEp == true)
+      s<<" modelDegradeEp: true      degradeEpRate: "<<degradeEpRate<<" degradeEpLimit: "<<degradeEpLimit<< endln;
+    if (modelDegradeKappa == true)
+      s<<" modelDegradeKappa: true   degradeKappaRate: "<<degradeKappaRate<<" degradeKappaLimit: "<<degradeKappaLimit<< endln;
+    if (modelDegradeFulb == true)
+      s<<" modelDegradeFulb: true    degradeFulbRate: "<<degradeFulbRate<<" degradeFulbLimit: "<<degradeFulbLimit<< endln;
+  } else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+    s << "\t\t\t{";
+    s << "\"name\": \"" << this->getTag() << "\", ";
+    s << "\"type\": \"shenSteel01\", ";
+    s << "\"Es\": " << Ee << ", ";
+    s << "\"Fy\": " << fy << ", ";
+    s << "\"Fu\": " << fu << ", ";
+    s << "\"eu\": " << eu << ", ";
+    s << "\"kappaBar0\": " << Rbso << ", ";
+    s << "\"Ep0i\": " << Epoi << ", ";
+    s << "\"alpha\": " << alfa << ", ";
+    s << "\"a\": " << a << ", ";
+    s << "\"b\": " << bb << ", ";
+    s << "\"c\": " << c << ", ";
+    s << "\"omega\": " << w << ", ";
+    s << "\"zeta\": " << ksi << ", ";
+    s << "\"e\": " << e << ", ";
+    s << "\"f\": " << fE << ", ";
+    s << "\"initStress\": " << initStress << ", ";
+    s << "\"alphaLat\": " << alphaLat << ", ";
+    s << "\"ep0\": " << ep0 << ", ";
+    s << "\"Epst\": " << Est;
+    if (modelYieldPlateau == true)
+      s << ", \"modelYieldPlateau\": true, \"M\": " << M << ", \"epst\": " << est;
+    if (modelLocalBuckling == true)
+      s << ", \"modelLocalBuckling\": true, \"localBucklingStrain\": " << localBucklingStrain << ", \"Ksft\": " << Ksft << ", \"alphaFulb\": " << alphaFulb << ", \"refFulb\": " << refFulb;
+    if (modelDegradeEp == true)
+      s << ", \"modelDegradeEp\": true, \"degradeEpRate\": " << degradeEpRate << ", \"degradeEpLimit\": " << degradeEpLimit;
+    if (modelDegradeKappa == true)
+      s << ", \"modelDegradeKappa\": true, \"degradeKappaRate\": " << degradeKappaRate << ", \"degradeKappaLimit\": " << degradeKappaLimit;
+    if (modelDegradeFulb == true)
+      s << ", \"modelDegradeFulb\": true, \"degradeFulbRate\": " << degradeFulbRate << ", \"degradeFulbLimit\": " << degradeFulbLimit;
+    s << "}";
+  }
   return;
 }

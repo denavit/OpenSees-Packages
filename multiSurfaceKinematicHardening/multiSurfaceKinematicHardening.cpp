@@ -558,13 +558,31 @@ int multiSurfaceKinematicHardening::recvSelf(int cTag, Channel &theChannel, FEM_
 }
 
 void multiSurfaceKinematicHardening::Print(OPS_Stream &s, int flag) {
-	s<<"multiSurfaceKinematicHardening, tag: "<<this->getTag()<<"\n";
-	s<<" E: "<<E<<"\n";
-	s<<" Initial Stress: "<<initStress<<"\n";
-	s<<" Number of Surfaces: "<<numSurfaces<<"\n";
-	for (int i=0; i<numSurfaces; i++) {
-    s<<"    #"<<i+1<<" Center = "<<startCenters[i]<<" Radius = "<<radii[i]<<" Hardening Modulus = "<<hardeningModulii[i]<<"\n";
+  if (flag == OPS_PRINT_PRINTMODEL_MATERIAL) {
+    s<<"multiSurfaceKinematicHardening, tag: "<<this->getTag()<<"\n";
+    s<<" E: "<<E<<"\n";
+    s<<" Initial Stress: "<<initStress<<"\n";
+    s<<" Number of Surfaces: "<<numSurfaces<<"\n";
+    for (int i=0; i<numSurfaces; i++) {
+      s<<"    #"<<i+1<<" Center = "<<startCenters[i]<<" Radius = "<<radii[i]<<" Hardening Modulus = "<<hardeningModulii[i]<<"\n";
+    }
+  } else if (flag == OPS_PRINT_PRINTMODEL_JSON) {
+    s << "\t\t\t{";
+    s << "\"name\": \"" << this->getTag() << "\", ";
+    s << "\"type\": \"multiSurfaceKinematicHardening\", ";
+    s << "\"E\": " << E << ", ";
+    s << "\"initStress\": " << initStress << ", ";
+    s << "\"numSurfaces\": " << numSurfaces << ", ";
+    s << "\"surfaces\": [\n";
+    for (int i = 0; i < numSurfaces; i++) {
+      s << "\t\t\t\t{\"center\": " << startCenters[i] << ", \"radius\": " << radii[i] << ", \"hardeningModulus\": " << hardeningModulii[i] << "}";
+      if (i == numSurfaces - 1)
+        s << "\n";
+      else
+        s << ",\n";
+    }
+    s << "\t\t\t]}";
   }
-	return;
+  return;
 }
 
