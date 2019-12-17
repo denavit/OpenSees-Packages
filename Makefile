@@ -8,6 +8,7 @@ all:
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/ratchet; $(MAKE);
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/mixedBeamColumn2d; $(MAKE);
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/mixedBeamColumn3d; $(MAKE);
+    @$(CD) $(FE)/../DEVELOPER/CompositePackages/inerterTruss2d; $(MAKE);
 
 # Miscellaneous
 tidy:
@@ -27,5 +28,6 @@ wipe: spotless
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/ratchet; $(MAKE) wipe;
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/mixedBeamColumn2d; $(MAKE) wipe;
 	@$(CD) $(FE)/../DEVELOPER/CompositePackages/mixedBeamColumn3d; $(MAKE) wipe;
+    @$(CD) $(FE)/../DEVELOPER/CompositePackages/inerterTruss2d; $(MAKE) wipe;
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
